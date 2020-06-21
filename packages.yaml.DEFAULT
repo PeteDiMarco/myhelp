@@ -1,0 +1,46 @@
+version: 1
+packages:
+  kpackagetool5:
+    description: 'KDE applet'
+    command: "kpackagetool5 --list --type Plasma/Applet -g | grep -v '^Listing service types:' | sed -e 's/^org\\.kde\\.plasma\\.//'"
+
+  dpkg:
+    description: 'Debian package'
+    command: "dpkg -l | grep '^ii'| sed -e 's/   */\\t/g' | cut -f 2 | sed -e 's/:.*$//'"
+
+  snap:
+    description: 'Snap package'
+    command: "snap list --all | sed -e 's/ .*$//'"
+
+  rpm:
+    description: 'Red Hat package'
+    command: "rpm -qa"
+
+  gem:
+    description: 'Ruby package'
+    command: "gem list | sed -e 's/ (.*$//'"
+
+  pip:
+    description: 'Python package'
+    command: "pip list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+
+  pip2:
+    description: 'Python2 package'
+    command: "pip2 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+
+  pip3:
+    description: 'Python package'
+    command: "pip3 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+
+  conda:
+    description: 'Python conda package'
+    command: "conda list | tail +4 | sed -e 's/  .*$//'"
+
+# npm:
+#'Node JavaScript package'
+#              "npm ls -parseable"
+# yarn:
+#'Yarn JavaScript package'
+#              "yarn list"
+# TODO:  Rust: cargo or rustup?
+# Perl or PHP?

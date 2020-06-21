@@ -1,0 +1,5 @@
+
+export MYHELP_DIR=${HOME}/.myhelp
+export MYHELP_PKG_DB=${MYHELP_DIR}/packages.db
+export MYHELP_PKG_YAML=${MYHELP_DIR}/packages.yaml
+export MYHELP_REFRESH=0
