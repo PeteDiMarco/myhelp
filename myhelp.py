@@ -31,6 +31,9 @@ import argparse
 import sqlite3
 import re
 import yaml
+import psutil
+import collections
+import itertools
 from enum import auto, IntEnum
 
 # Defaults:
@@ -85,26 +88,41 @@ def run_cmd(cmd_str: str, ignore: list = [0], exit_on_error: bool = False, env=N
     return result.stdout.decode().strip()
 
 
-"""
-# Get the names of all the running processes.
-# Process names in brackets []:
-progs=$(ps --no-headers -Ao args -ww | grep '^\[' | sed -Ee 's/^\[([^]/:]+).*$/\1/')
-# Process names without brackets and append to progs:
-progs=${progs}$(ps --no-headers -Ao args -ww | grep -v '^\[' | sed -e 's/ .*$//')
-# Filter and sort progs:
-progs=$(echo "${progs}" | sort | uniq | xargs basename -a)
-"""
+def get_processes():
+    return collections.Counter(
+        [proc.name for proc in psutil.process_iter(attrs=["name"])]
+    )
+
+
+def get_ent_info(target: str):
+    results = []
+    if run_cmd(f"getent passwd {target}", ignore=[0, 2]):
+        results.append(f"There is a user named {target}.")
+    if run_cmd(f"getent group {target}", ignore=[0, 2]):
+        results.append(f"There is a group named {target}.")
+    if run_cmd(f"getent hosts {target}", ignore=[0, 2]):
+        results.append(f"There is a host named {target}.")
+    if run_cmd(f"getent services {target}", ignore=[0, 2]):
+        results.append(f"There is a network service named {target}.")
+    return results
 
 
 def get_file_type(token: str):
     result = run_cmd(f"file -b {token}", ignore=[0, 127])
     if "No such file or directory" in result:
-        return ""
-    return result
+        return []
+    if result == "directory":
+        return [f"{token} is a {result}."]
+    elif result:
+        return [f"{token} is a(n) {result} file."]
+    return []
 
 
 def get_mime_type(token: str):
-    return run_cmd(f"xdg-mime query filetype {token} 2>/dev/null", ignore=[0, 2, 127])
+    result = run_cmd(f"xdg-mime query filetype {token} 2>/dev/null", ignore=[0, 2, 5, 127])
+    if result:
+        return [f"{term} has the MIME type {result}."]
+    return []
 
 
 def open_package_db(conn):
@@ -130,24 +148,54 @@ def refresh_package_db(cursor, config_filename: str):
 
 
 def search_package_db(cursor, target: str):
+    results = []
     cursor.execute(f"SELECT * FROM {DB_TABLE} WHERE Name=?", (target,))
-    return cursor.fetchall()
+    for record in cursor.fetchall():
+        results.append(f"{target} is a {record[2]}.")
+    return results
+
+
+def get_devices():
+    devices = collections.Counter()
+    mount_points = collections.Counter()
+    fstypes = collections.Counter()
+    for elt in psutil.disk_partitions(all=True):
+        devices.update(elt.device)
+        mount_points.update(elt.mountpoint)
+        fstypes.update(elt.fstype)
+    return {"devices": devices, "mount_points": mount_points, "fstypes": fstypes}
+
+
+def search_devices(device_dict: dict, target: str):
+    results = []
+    if device_dict["devices"][target]:
+        results.append(f"There is at least 1 device called {target}.")
+    if device_dict["mount_points"][target]:
+        results.append(f"There is at least 1 mount point called {target}.")
+    if device_dict["fstypes"][target]:
+        results.append(f"There is at least 1 file system type called {target}.")
+    return results
 
 
 def has_info_page(token: str):
     result = run_cmd(f"info -w {token}", [127])
-    if result in ["", "dir", "*manpages*"] or result.startswith('././'):
-        return False
-    return True
+    if result in ["", "dir", "*manpages*"] or result.startswith("././"):
+        return []
+    return [f"{term} has an info page."]
 
 
 def has_man_page(token: str):
     result = run_cmd(f"man --whatis {token} 2>/dev/null", ignore=[16, 127])
-    return bool(result)
+    if bool(result):
+        return [f"{term} has a man page."]
+    return []
 
 
-def get_which_result(token: str):
-    return run_cmd(f"which -a {token} 2>/dev/null", ignore=[1, 127])
+def get_which_results(token: str):
+    results = []
+    for line in run_cmd(f"which -a {token} 2>/dev/null", ignore=[1, 127]).splitlines():
+        results.append(f"{token} is the command {line}.")
+    return results
 
 
 class ShellBuiltIn:
@@ -175,6 +223,7 @@ class ShellBuiltIn:
         self.results = dict()
         for cmd in ShellBuiltIn.Cmd.__members__.keys():
             self.results[cmd] = []
+        # Dispatch parsing based on command type:
         self._cmd_parser_ = {
             ShellBuiltIn.Cmd.ALIAS.name.lower(): self.parse_alias,
             ShellBuiltIn.Cmd.DECLARE.name.lower(): self.parse_declare,
@@ -211,10 +260,12 @@ class ShellBuiltIn:
             if None in attr_list:
                 msg = f"{match.group(2)} is a shell variable."
             else:
-                msg = f"{match.group(2)} has the attribute(s): " + ", ".join(attr_list) + "."
-            self.results[ShellBuiltIn.Cmd.DECLARE.name].append(
-                (match.group(2), msg)
-            )
+                msg = (
+                    f"{match.group(2)} has the attribute(s): "
+                    + ", ".join(attr_list)
+                    + "."
+                )
+            self.results[ShellBuiltIn.Cmd.DECLARE.name].append((match.group(2), msg))
 
     def parse_set(self, line: str):
         match = re.search(r"^([a-zA-Z0-9_]+)=", line)
@@ -243,12 +294,10 @@ class ShellBuiltIn:
     def search(self, target: str):
         retval = []
         for key in self.results.keys():
-            retval.extend([ msg for (label, msg) in self.results[key] if label == target ])
+            retval.extend(
+                [msg for (label, msg) in self.results[key] if label == target]
+            )
         return retval
-
-
-def read_shell_builtins():
-    builtin = ShellBuiltIn(sys.stdin)
 
 
 if __name__ == "__main__":
@@ -288,27 +337,32 @@ if __name__ == "__main__":
     yaml_file = os.environ["MYHELP_PKG_YAML"]
     refresh = args.refresh or int(os.environ["MYHELP_REFRESH"]) == 1
     builtins = ShellBuiltIn(sys.stdin)
+    proc_dict = get_processes()
+    device_dict = get_devices()
     with sqlite3.connect(db_file) as conn:
         cursor = open_package_db(conn)
         if refresh:
             refresh_package_db(cursor, yaml_file)
             conn.commit()
         for term in args.terms:
-            for result in builtins.search(term):
-                print(result)
-            result = get_file_type(term)
-            if result == "directory":
-                print(f"{term} is a {result}.")
-            elif result:
-                print(f"{term} is a(n) {result} file.")
-            result = get_mime_type(term)
-            if result:
-                print(f"{term} has the MIME type {result}.")
-            for result in search_package_db(cursor, term):
-                print(f"{term} is a {result[2]}.")
-            if has_info_page(term):
-                print(f"{term} has an info page.")
-            if has_man_page(term):
-                print(f"{term} has a man page.")
-            for result in get_which_result(term).splitlines():
-                print(f"{term} is the command {result}.")
+            results = (
+                get_file_type(term)
+                + get_mime_type(term)
+                + search_package_db(cursor, term)
+                + has_info_page(term)
+                + has_man_page(term)
+                + get_which_results(term)
+                + builtins.search(term)
+                + search_devices(device_dict, term)
+                + get_ent_info(term)
+            )
+            if proc_dict[term] == 1:
+                results.append(f"There is 1 process called {term}.")
+            elif proc_dict[term] > 1:
+                results.append(f"There are {proc_dict[term]} processes called {term}.")
+            if results:
+                for res in results:
+                    print(res)
+            else:
+                print(f"Nothing found for {term}.")
+            print()
