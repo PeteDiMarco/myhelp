@@ -15,14 +15,15 @@
 # limitations under the License.
 # ***************************************************************************
 #
-# Name:
-# Version:
-# Date:
-# Written by: Pete DiMarco <pete.dimarco.software@gmail.com>
+# Name:         myhelp.py
+# Version:      0.2
+# Date:         06/23/2020
+# Written by:   Pete DiMarco <pete.dimarco.software@gmail.com>
 #
 # Description:
 #
 # Dependencies:
+# getent, xdg-mime, file, info, man, which
 
 import os
 import sys
@@ -38,13 +39,41 @@ from enum import auto, IntEnum
 
 # Defaults:
 PROGRAM_NAME = os.path.basename(sys.argv[0])
+DESCRIPTION="""
+Identifies the names provided.  Tries every test imaginable.  Looks for:
+man pages, info pages, executables in PATH, aliases, shell variables, running
+processes, shell functions, built-in shell commands, packages, filesystems,
+and files relative to the current working directory."""
+
 EPILOG = ""
 DEBUG = False
 DB_TABLE = "Packages"
 YAML_FILE_VERSION = 1
 
 
-def run_cmd(cmd_str: str, ignore: list = [0], exit_on_error: bool = False, env=None):
+class Spinner:
+    def __init__(self):
+        self.spinner = itertools.cycle(['-', '/', '|', '\\'])
+
+    def __next__(self):
+        sys.stdout.write(next(self.spinner))
+        sys.stdout.flush()
+        sys.stdout.write('\b')
+
+    def __enter__(self):
+        next(self)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
+    def stop(self):
+        sys.stdout.write('\b')
+        sys.stdout.write(' ')   # overwrite spinner with blank
+        sys.stdout.write('\r')  # move to next line
+        sys.stdout.flush()
+
+
+def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
     """
 
     :param cmd_str: Shell command to run.
@@ -54,8 +83,18 @@ def run_cmd(cmd_str: str, ignore: list = [0], exit_on_error: bool = False, env=N
     :return: str
     """
     result = None
-    if 0 not in ignore:
-        ignore.append(0)
+    ignore_all = False
+    if isinstance(ignore, list):
+        if '*' in ignore:
+            ignore_all = True
+        elif 0 not in ignore:
+            ignore.append(0)
+    elif isinstance(ignore, int):
+        ignore = [0, ignore]
+    elif ignore =='*':
+        ignore_all = True
+    else:
+        raise ValueError(ignore)
 
     try:
         result = subprocess.run(
@@ -66,7 +105,7 @@ def run_cmd(cmd_str: str, ignore: list = [0], exit_on_error: bool = False, env=N
         # For example: grep will return errno == 1 if it doesn't match any
         # lines in its input stream.  We want to ignore this case since it's
         # not really an error.
-        if e.returncode not in ignore:
+        if not ignore_all and e.returncode not in ignore:
             if exit_on_error:
                 exit(e.returncode)
             else:
@@ -74,7 +113,7 @@ def run_cmd(cmd_str: str, ignore: list = [0], exit_on_error: bool = False, env=N
                     returncode=e.returncode, cmd=cmd_str
                 )
     else:
-        if result.returncode not in ignore or result.stderr:
+        if not ignore_all and (result.returncode not in ignore or result.stderr):
             if exit_on_error:
                 exit(result.returncode)
             else:
@@ -90,7 +129,7 @@ def run_cmd(cmd_str: str, ignore: list = [0], exit_on_error: bool = False, env=N
 
 def get_processes():
     return collections.Counter(
-        [proc.name for proc in psutil.process_iter(attrs=["name"])]
+        [proc.name() for proc in psutil.process_iter(attrs=["name"])]
     )
 
 
@@ -119,10 +158,23 @@ def get_file_type(token: str):
 
 
 def get_mime_type(token: str):
-    result = run_cmd(f"xdg-mime query filetype {token} 2>/dev/null", ignore=[0, 2, 5, 127])
+    result = run_cmd(
+        f"xdg-mime query filetype {token} 2>/dev/null", ignore=[0, 2, 5, 127]
+    )
     if result:
         return [f"{term} has the MIME type {result}."]
     return []
+
+
+def get_df_info(token: str):
+    retval = []
+    result = run_cmd(
+        f"df --output=source,fstype {token} 2>/dev/null", ignore='*'
+    ).splitlines()
+    if result:
+        for line in result[1:]:
+            retval.append("%s is on filesystem %s (type %s)." % tuple([token] + line.split()))
+    return retval
 
 
 def open_package_db(conn):
@@ -133,18 +185,21 @@ def open_package_db(conn):
     return cursor
 
 
-def refresh_package_db(cursor, config_filename: str):
+def refresh_package_db(cursor, config_filename: str, spinner=None):
     cursor.execute(f"DELETE FROM {DB_TABLE}")
     with open(config_filename, "r") as fp:
         pkg_data = yaml.load(fp, Loader=yaml.BaseLoader)
         assert int(pkg_data["version"]) == YAML_FILE_VERSION
         for key, val in pkg_data["packages"].items():
-            pkg_list = run_cmd(val["command"], ignore=[0, 127]).splitlines()
-            records = [(pkg, key, val["description"]) for pkg in pkg_list]
-            cursor.executemany(
-                f"INSERT INTO {DB_TABLE} (Name, Type, Description) VALUES (?,?,?)",
-                records,
-            )
+            if run_cmd(f"which {key}", ignore=[0, 1]).strip():
+                pkg_list = run_cmd(val["command"]).splitlines()
+                records = [(pkg, key, val["description"]) for pkg in pkg_list]
+                if spinner:
+                    next(spinner)
+                cursor.executemany(
+                    f"INSERT INTO {DB_TABLE} (Name, Type, Description) VALUES (?,?,?)",
+                    records,
+                )
 
 
 def search_package_db(cursor, target: str):
@@ -160,9 +215,9 @@ def get_devices():
     mount_points = collections.Counter()
     fstypes = collections.Counter()
     for elt in psutil.disk_partitions(all=True):
-        devices.update(elt.device)
-        mount_points.update(elt.mountpoint)
-        fstypes.update(elt.fstype)
+        devices.update([elt.device])
+        mount_points.update([elt.mountpoint])
+        fstypes.update([elt.fstype])
     return {"devices": devices, "mount_points": mount_points, "fstypes": fstypes}
 
 
@@ -304,7 +359,8 @@ if __name__ == "__main__":
     # Parse command line arguments:
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="",
+        prog=os.environ["MYHELP_ALIAS_NAME"],
+        description=DESCRIPTION,
         epilog=EPILOG,
     )
     parser.add_argument(
@@ -322,10 +378,13 @@ if __name__ == "__main__":
         help="Refresh package cache.",
     )
     parser.add_argument(
-        "-i", "--interactive", action="store_true", default=False, help="Show spinner."
+        "-s", "--standalone", action="store_true", default=False, help="Don't read shell builtins."
     )
     parser.add_argument(
-        "terms", metavar="NAME", type=str, nargs="*", help="Objects to identify."
+        "-i", "--interactive", action="store_true", default=False, help="Show spinner when refreshing package cache."
+    )
+    parser.add_argument(
+        "terms", metavar="NAME", type=str, nargs="*", help="Object to identify."
     )
 
     args = parser.parse_args()
@@ -336,14 +395,22 @@ if __name__ == "__main__":
     db_file = os.environ["MYHELP_PKG_DB"]
     yaml_file = os.environ["MYHELP_PKG_YAML"]
     refresh = args.refresh or int(os.environ["MYHELP_REFRESH"]) == 1
-    builtins = ShellBuiltIn(sys.stdin)
+    if not args.standalone:
+        builtins = ShellBuiltIn(sys.stdin)
     proc_dict = get_processes()
+    if DEBUG:
+        print(proc_dict)
     device_dict = get_devices()
+    if DEBUG:
+        print(device_dict)
     with sqlite3.connect(db_file) as conn:
         cursor = open_package_db(conn)
         if refresh:
-            refresh_package_db(cursor, yaml_file)
+            spinner = Spinner() if args.interactive else None
+            refresh_package_db(cursor, yaml_file, spinner)
             conn.commit()
+            if spinner:
+                spinner.stop()
         for term in args.terms:
             results = (
                 get_file_type(term)
@@ -352,10 +419,12 @@ if __name__ == "__main__":
                 + has_info_page(term)
                 + has_man_page(term)
                 + get_which_results(term)
-                + builtins.search(term)
                 + search_devices(device_dict, term)
                 + get_ent_info(term)
+                + get_df_info(term)
             )
+            if not args.standalone:
+                results.extend(builtins.search(term))
             if proc_dict[term] == 1:
                 results.append(f"There is 1 process called {term}.")
             elif proc_dict[term] > 1:

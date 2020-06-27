@@ -42,11 +42,9 @@ preferred_shell=$(basename "$SHELL") # User's shell from passwd.
 rc_file=${HOME}/.myhelprc
 
 declare -a flags=()
-#export flags
 declare -a terms=()
-#export terms
 
-# We need a temporary file to store the output of `alias`.
+# We need a temporary file to store the output of the shell builtin commands.
 temp_file=$(mktemp /tmp/$$.XXXXXX)
 trap "rm -f $temp_file" 0 2 3 15
 
@@ -60,9 +58,8 @@ fi
 if [[ -f "${rc_file}" ]]; then
   source "${rc_file}"
 else
-  export MYHELP_DIR=${HOME}/.myhelp
-  export MYHELP_PKG_DB=${MYHELP_DIR}/packages.db
-  export MYHELP_REFRESH=0
+  echo "ERROR: Can't find ${rc_file}!"
+  exit 1
 fi
 
 
@@ -94,7 +91,6 @@ fi
 
   # Check types in the current shell.
   echo "###type###"
-
   # Iterate through all remaining arguments.
   while [[ $# -ne 0 ]]; do
     if [[ -z "$1" ]]; then	# Skip over blanks.
@@ -129,6 +125,5 @@ fi
     shift
   done
 } > "${temp_file}"
-python3 myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
-#echo python3 myhelp.py "${flags[@]}" "${terms[@]}"
+myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
 rm -f "${temp_file}"
