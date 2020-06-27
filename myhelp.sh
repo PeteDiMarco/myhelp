@@ -110,11 +110,9 @@ fi
       break
     elif [[ "$1" =~ ^- ]]; then
       # push flag
-      #echo "Adding $1 to flags."
       flags+=( "$1" )
     else
       # push term
-      #echo "Adding $1 to terms."
       terms+=( "$1" )
       # Use `type` built-in.
       retval=$(type -a "$1" 2>/dev/null)
@@ -127,3 +125,4 @@ fi
 } > "${temp_file}"
 myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
 rm -f "${temp_file}"
+
