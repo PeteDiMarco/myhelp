@@ -108,6 +108,12 @@ fi
         shift
       done
       break
+    elif [[ "$1" = '-p' ]] || [[ "$1" =~ ^--p ]]; then
+      # push flag
+      flags+=( "$1" )
+      shift
+      # push flag argument
+      flags+=( "$1" )
     elif [[ "$1" =~ ^- ]]; then
       # push flag
       flags+=( "$1" )

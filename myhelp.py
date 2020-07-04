@@ -36,10 +36,11 @@ import psutil
 import collections
 import itertools
 from enum import auto, IntEnum
+from typing import Pattern
 
 # Defaults:
 PROGRAM_NAME = os.path.basename(sys.argv[0])
-DESCRIPTION="""
+DESCRIPTION = """
 Identifies the names provided.  Tries every test imaginable.  Looks for:
 man pages, info pages, executables in PATH, aliases, shell variables, running
 processes, shell functions, built-in shell commands, packages, filesystems,
@@ -52,13 +53,17 @@ YAML_FILE_VERSION = 1
 
 
 class Spinner:
+    """
+    Implements spinner object.
+    """
+
     def __init__(self):
-        self.spinner = itertools.cycle(['-', '/', '|', '\\'])
+        self.spinner = itertools.cycle(["-", "/", "|", "\\"])
 
     def __next__(self):
         sys.stdout.write(next(self.spinner))
         sys.stdout.flush()
-        sys.stdout.write('\b')
+        sys.stdout.write("\b")
 
     def __enter__(self):
         next(self)
@@ -67,31 +72,33 @@ class Spinner:
         self.stop()
 
     def stop(self):
-        sys.stdout.write('\b')
-        sys.stdout.write(' ')   # overwrite spinner with blank
-        sys.stdout.write('\r')  # move to next line
+        sys.stdout.write("\b")
+        sys.stdout.write(" ")  # overwrite spinner with blank
+        sys.stdout.write("\r")  # move to next line
         sys.stdout.flush()
 
 
 def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
     """
-
+    Runs a shell command. Can ignore one or more return codes.
     :param cmd_str: Shell command to run.
-    :param ignore: List of return codes to ignore.
-    :param exit_on_error: Exit program if error occurs.
-    :param env: Dict.
+    :param ignore: Integer, string, or list of integers indicating return codes to ignore, or '*' to ignore all errors AND messages to stderr.
+    :param exit_on_error: Exit program if error occurs, else raises exception.
+    :param env: Dict of environment variables.
     :return: str
+    :except subprocess.CalledProcessError
+    :except ValueError
     """
     result = None
     ignore_all = False
     if isinstance(ignore, list):
-        if '*' in ignore:
+        if "*" in ignore:  # Ignore all return codes.
             ignore_all = True
-        elif 0 not in ignore:
+        elif 0 not in ignore:  # Always ignore return code 0.
             ignore.append(0)
     elif isinstance(ignore, int):
-        ignore = [0, ignore]
-    elif ignore =='*':
+        ignore = [0, ignore]  # Always ignore return code 0.
+    elif ignore == "*":  # Ignore all return codes.
         ignore_all = True
     else:
         raise ValueError(ignore)
@@ -104,7 +111,8 @@ def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
         # "ignore" contains return codes that are not considered errors.
         # For example: grep will return errno == 1 if it doesn't match any
         # lines in its input stream.  We want to ignore this case since it's
-        # not really an error.
+        # not really an error. Note: pipelines return the errno of the last command
+        # by default. Use `set -o pipefail` to override this behavior.
         if not ignore_all and e.returncode not in ignore:
             if exit_on_error:
                 exit(e.returncode)
@@ -115,7 +123,7 @@ def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
     else:
         if not ignore_all and (result.returncode not in ignore or result.stderr):
             if exit_on_error:
-                exit(result.returncode)
+                exit(result.returncode if result.returncode != 0 else 1)
             else:
                 raise subprocess.CalledProcessError(
                     returncode=result.returncode,
@@ -128,25 +136,66 @@ def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
 
 
 def get_processes():
+    """
+    Gets the names of all running processes. Does not accept globs.
+    :return: Counter dict of process names.
+    """
     return collections.Counter(
         [proc.name() for proc in psutil.process_iter(attrs=["name"])]
     )
 
 
-def get_ent_info(target: str):
+def search_processes(procs: collections.Counter, target):
+    """
+    Returns the names of all running processes that match `target`. Accepts
+    compiled regexes or strings.
+    :param procs: Dictionary of process names to counts.
+    :param target: String or RE to search for.
+    :return: list of str.
+    """
     results = []
-    if run_cmd(f"getent passwd {target}", ignore=[0, 2]):
+    if isinstance(target, str):
+        if procs[term] == 1:
+            results.append(f"There is 1 process called {target}.")
+        elif procs[term] > 1:
+            results.append(f"There are {procs[target]} processes called {target}.")
+    elif isinstance(target, Pattern):
+        for key, val in dict_get_regex(procs, target, return_tuple=True):
+            if val == 1:
+                results.append(f"There is 1 process called {key}.")
+            elif val > 1:
+                results.append(f"There are {val} processes called {key}.")
+    else:
+        raise ValueError(target)
+    return results
+
+
+def get_ent_info(target: str):
+    """
+    Uses the `getent` command (if available) to scan the user, group, hosts,
+    and services databases for `target`. Does not accept globs.
+    :param target: string to search for.
+    :return: list of strings.
+    """
+    results = []
+    ignore_list = [0, 2, 127]
+    if run_cmd(f"getent passwd {target}", ignore=ignore_list):
         results.append(f"There is a user named {target}.")
-    if run_cmd(f"getent group {target}", ignore=[0, 2]):
+    if run_cmd(f"getent group {target}", ignore=ignore_list):
         results.append(f"There is a group named {target}.")
-    if run_cmd(f"getent hosts {target}", ignore=[0, 2]):
+    if run_cmd(f"getent hosts {target}", ignore=ignore_list):
         results.append(f"There is a host named {target}.")
-    if run_cmd(f"getent services {target}", ignore=[0, 2]):
+    if run_cmd(f"getent services {target}", ignore=ignore_list):
         results.append(f"There is a network service named {target}.")
     return results
 
 
 def get_file_type(token: str):
+    """
+    Uses the `file` command (if available) to analyze `token`. Accepts globs.
+    :param token: string file name.
+    :return: list of strings.
+    """
     result = run_cmd(f"file -b {token}", ignore=[0, 127])
     if "No such file or directory" in result:
         return []
@@ -158,6 +207,12 @@ def get_file_type(token: str):
 
 
 def get_mime_type(token: str):
+    """
+    Uses the `xdg-mime` command (if available) to determine the MIME type of
+    `token`. Only processes first argument if passed a glob.
+    :param token: string object name.
+    :return: list of 0 or 1 strings.
+    """
     result = run_cmd(
         f"xdg-mime query filetype {token} 2>/dev/null", ignore=[0, 2, 5, 127]
     )
@@ -167,13 +222,21 @@ def get_mime_type(token: str):
 
 
 def get_df_info(token: str):
+    """
+    Uses the `df` command (if available) to determine the name and type of the
+    filesystem that `token` resides on. Accepts globs.
+    :param token: string object name.
+    :return: list of strings.
+    """
     retval = []
     result = run_cmd(
-        f"df --output=source,fstype {token} 2>/dev/null", ignore='*'
+        f"df --output=source,fstype {token} 2>/dev/null", ignore="*"
     ).splitlines()
     if result:
         for line in result[1:]:
-            retval.append("%s is on filesystem %s (type %s)." % tuple([token] + line.split()))
+            retval.append(
+                "%s is on filesystem %s (type %s)." % tuple([token] + line.split())
+            )
     return retval
 
 
@@ -186,13 +249,20 @@ def open_package_db(conn):
 
 
 def refresh_package_db(cursor, config_filename: str, spinner=None):
-    cursor.execute(f"DELETE FROM {DB_TABLE}")
+    """
+    Reloads the contents of the package name database from `config_filename`.
+    :param cursor: SQLite cursor object.
+    :param config_filename: string name of YAML file.
+    :param spinner: Spinner object.
+    :return: None
+    """
+    cursor.execute(f"DELETE FROM {DB_TABLE}")  # Delete all rows from table.
     with open(config_filename, "r") as fp:
         pkg_data = yaml.load(fp, Loader=yaml.BaseLoader)
-        assert int(pkg_data["version"]) == YAML_FILE_VERSION
+        assert int(pkg_data["version"]) == YAML_FILE_VERSION  # Ensure we recognize the version of the YAML file.
         for key, val in pkg_data["packages"].items():
-            if run_cmd(f"which {key}", ignore=[0, 1]).strip():
-                pkg_list = run_cmd(val["command"]).splitlines()
+            if run_cmd(f"which {key}", ignore=[0, 1]).strip():  # If the command is executable:
+                pkg_list = run_cmd(val["command"]).splitlines()  # Command should return 1 package name per line.
                 records = [(pkg, key, val["description"]) for pkg in pkg_list]
                 if spinner:
                     next(spinner)
@@ -203,14 +273,26 @@ def refresh_package_db(cursor, config_filename: str, spinner=None):
 
 
 def search_package_db(cursor, target: str):
-    results = []
-    cursor.execute(f"SELECT * FROM {DB_TABLE} WHERE Name=?", (target,))
-    for record in cursor.fetchall():
-        results.append(f"{target} is a {record[2]}.")
-    return results
+    """
+    Searches the package name database for `target`. Accepts globs.
+    :param cursor: SQLite cursor object.
+    :param target: string name to search for.
+    :return: list of strings.
+    """
+    if '%' in target:
+        cursor.execute(f"SELECT * FROM {DB_TABLE} WHERE Name LIKE ?", (target,))
+        return [ f"{record[0]} is a {record[2]}." for record in cursor.fetchall() ]
+    else:
+        cursor.execute(f"SELECT * FROM {DB_TABLE} WHERE Name=?", (target,))
+        return [ f"{target} is a {record[2]}." for record in cursor.fetchall() ]
 
 
 def get_devices():
+    """
+    Collects information on all devices, mount points, and file system types. Does not
+    accept globs.
+    :return: dict of Counter dicts.
+    """
     devices = collections.Counter()
     mount_points = collections.Counter()
     fstypes = collections.Counter()
@@ -222,17 +304,39 @@ def get_devices():
 
 
 def search_devices(device_dict: dict, target: str):
+    """
+    Searches the dict of Counter dicts for any devices, mount points, or
+    file system types called `target`. No globs.
+    :param device_dict:
+    :param target:
+    :return: list of strings
+    """
     results = []
-    if device_dict["devices"][target]:
-        results.append(f"There is at least 1 device called {target}.")
-    if device_dict["mount_points"][target]:
-        results.append(f"There is at least 1 mount point called {target}.")
-    if device_dict["fstypes"][target]:
-        results.append(f"There is at least 1 file system type called {target}.")
+    if isinstance(target, str):
+        if device_dict["devices"][target]:
+            results.append(f"There is at least 1 device called {target}.")
+        if device_dict["mount_points"][target]:
+            results.append(f"There is at least 1 mount point called {target}.")
+        if device_dict["fstypes"][target]:
+            results.append(f"There is at least 1 file system type called {target}.")
+    elif isinstance(target, Pattern):
+        for key, _ in dict_get_regex(device_dict["devices"], target, return_tuple=True):
+            results.append(f"There is at least 1 device called {key}.")
+        for key, _ in dict_get_regex(device_dict["mount_points"], target, return_tuple=True):
+            results.append(f"There is at least 1 mount point called {key}.")
+        for key, _ in dict_get_regex(device_dict["fstypes"], target, return_tuple=True):
+            results.append(f"There is at least 1 file system type called {key}.")
+    else:
+        raise ValueError(target)
     return results
 
 
 def has_info_page(token: str):
+    """
+    Checks if the `info` command (if available) has information on `token`. No globs.
+    :param token:
+    :return: list of 0 or 1 strings
+    """
     result = run_cmd(f"info -w {token}", [127])
     if result in ["", "dir", "*manpages*"] or result.startswith("././"):
         return []
@@ -240,6 +344,11 @@ def has_info_page(token: str):
 
 
 def has_man_page(token: str):
+    """
+    Checks if the `man` command (if available) has information on `token`. No globs.
+    :param token:
+    :return: list of 0 or 1 strings
+    """
     result = run_cmd(f"man --whatis {token} 2>/dev/null", ignore=[16, 127])
     if bool(result):
         return [f"{term} has a man page."]
@@ -247,6 +356,11 @@ def has_man_page(token: str):
 
 
 def get_which_results(token: str):
+    """
+    Uses the `which` command (if available) to determine if `token` is executable. No globs.
+    :param token:
+    :return: list of strings
+    """
     results = []
     for line in run_cmd(f"which -a {token} 2>/dev/null", ignore=[1, 127]).splitlines():
         results.append(f"{token} is the command {line}.")
@@ -254,6 +368,9 @@ def get_which_results(token: str):
 
 
 class ShellBuiltIn:
+    """
+    Collects data from Bash built-in commands for easy searching.
+    """
     class Cmd(IntEnum):
         ALIAS = 0
         DECLARE = auto()
@@ -275,6 +392,10 @@ class ShellBuiltIn:
     }
 
     def __init__(self, input_file):
+        """
+        Reads the results of several Bash built-in commands from `input_file`.
+        :param input_file: file-like object to read from.
+        """
         self.results = dict()
         for cmd in ShellBuiltIn.Cmd.__members__.keys():
             self.results[cmd] = []
@@ -290,6 +411,11 @@ class ShellBuiltIn:
             self.parse(line)
 
     def parse(self, line: str):
+        """
+        Parses the `line` string.
+        :param line:
+        :return:
+        """
         if line.startswith("###") and line.endswith("###"):
             self._mode_ = line.strip("# ").lower()
         else:
@@ -298,6 +424,11 @@ class ShellBuiltIn:
             self._cmd_parser_[self._mode_](line)
 
     def parse_alias(self, line: str):
+        """
+        Parses aliases.
+        :param line:
+        :return:
+        """
         match = re.search(r"^alias ([^=]*)=(.*)$", line)
         if match:
             self.results[ShellBuiltIn.Cmd.ALIAS.name].append(
@@ -307,6 +438,11 @@ class ShellBuiltIn:
             raise ValueError(line)
 
     def parse_declare(self, line: str):
+        """
+        Parses declarations.
+        :param line:
+        :return:
+        """
         match = re.search(r"^declare -([^ ]*) ([^ =]*).*$", line)
         if match:
             attr_list = []
@@ -323,6 +459,11 @@ class ShellBuiltIn:
             self.results[ShellBuiltIn.Cmd.DECLARE.name].append((match.group(2), msg))
 
     def parse_set(self, line: str):
+        """
+        Parses `set` commands for shell variable and function names.
+        :param line:
+        :return:
+        """
         match = re.search(r"^([a-zA-Z0-9_]+)=", line)
         if match:
             self.results[ShellBuiltIn.Cmd.SET.name].append(
@@ -338,6 +479,11 @@ class ShellBuiltIn:
             return
 
     def parse_type(self, line: str):
+        """
+        Parses the output of the `type` command.
+        :param line:
+        :return:
+        """
         match = re.search(r"^([^ ]*) is (.*)$", line)
         if match:
             self.results[ShellBuiltIn.Cmd.ALIAS.name].append(
@@ -347,12 +493,69 @@ class ShellBuiltIn:
             raise ValueError(line)
 
     def search(self, target: str):
+        """
+        Search all results for `target`.
+        :param target: string name to search for.
+        :return: list of strings.
+        """
         retval = []
         for key in self.results.keys():
             retval.extend(
                 [msg for (label, msg) in self.results[key] if label == target]
             )
         return retval
+
+    def pattern_search(self, pattern):
+        """
+        Search all results for `pattern`. Accepts globs.
+        :param pattern: string glob to search for.
+        :return: list of strings.
+        """
+        retval = []
+        if isinstance(pattern, str):
+            patt_re = glob_to_regex(pattern)
+        elif isinstance(pattern, Pattern):
+            patt_re = pattern
+        else:
+            raise ValueError(pattern)
+
+        for key in self.results.keys():
+            retval.extend(
+                [msg for (label, msg) in self.results[key] if patt_re.search(label)]
+            )
+        return retval
+
+
+def glob_to_regex(pattern: str):
+    return re.compile('^' + pattern.replace('*', '.*') + '$')
+
+
+def glob_to_sql(pattern: str):
+    return pattern.replace('*', '%')
+
+
+def dict_get_regex(d, patt_re, return_tuple: bool = False):
+    results = []
+    key_list = d.keys()
+    if isinstance(patt_re, str):
+        patt_re = glob_to_regex(patt_re)
+
+    for key, val in d.items():
+        if patt_re.search(key):
+            if return_tuple:
+                results.append( (key, val) )
+            else:
+                results.append(val)
+    return results
+
+
+def print_results(results, term):
+    if results:
+        for res in results:
+            print(res)
+    else:
+        print(f"Nothing found for {term}.")
+    print()
 
 
 if __name__ == "__main__":
@@ -378,10 +581,24 @@ if __name__ == "__main__":
         help="Refresh package cache.",
     )
     parser.add_argument(
-        "-s", "--standalone", action="store_true", default=False, help="Don't read shell builtins."
+        "-p",
+        "--pattern",
+        action='append',
+        help="Search for glob pattern.",
     )
     parser.add_argument(
-        "-i", "--interactive", action="store_true", default=False, help="Show spinner when refreshing package cache."
+        "-s",
+        "--standalone",
+        action="store_true",
+        default=False,
+        help="Don't read shell builtins.",
+    )
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        default=False,
+        help="Show spinner when refreshing package cache.",
     )
     parser.add_argument(
         "terms", metavar="NAME", type=str, nargs="*", help="Object to identify."
@@ -403,6 +620,9 @@ if __name__ == "__main__":
     device_dict = get_devices()
     if DEBUG:
         print(device_dict)
+    if args.pattern is None:
+        args.pattern = []
+
     with sqlite3.connect(db_file) as conn:
         cursor = open_package_db(conn)
         if refresh:
@@ -411,6 +631,7 @@ if __name__ == "__main__":
             conn.commit()
             if spinner:
                 spinner.stop()
+
         for term in args.terms:
             results = (
                 get_file_type(term)
@@ -422,16 +643,22 @@ if __name__ == "__main__":
                 + search_devices(device_dict, term)
                 + get_ent_info(term)
                 + get_df_info(term)
+                + search_processes(proc_dict, term)
             )
             if not args.standalone:
                 results.extend(builtins.search(term))
-            if proc_dict[term] == 1:
-                results.append(f"There is 1 process called {term}.")
-            elif proc_dict[term] > 1:
-                results.append(f"There are {proc_dict[term]} processes called {term}.")
-            if results:
-                for res in results:
-                    print(res)
-            else:
-                print(f"Nothing found for {term}.")
-            print()
+            print_results(results, term)
+
+        for pattern in args.pattern:
+            patt_re = glob_to_regex(pattern)
+            results = (
+                get_file_type(pattern)
+                + search_package_db(cursor, glob_to_sql(pattern))
+                + search_devices(device_dict, patt_re)
+                + get_df_info(pattern)
+                + search_processes(proc_dict, patt_re)
+            )
+            if not args.standalone:
+                results.extend(builtins.pattern_search(patt_re))
+            print_results(results, pattern)
+

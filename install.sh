@@ -23,7 +23,7 @@
 
 # Defaults:
 DEBUG=false
-force='-n'
+force=
 my_name=$(basename "$0")     # This script's name.
 src_dir=$(pwd)
 config_dir="${HOME}"/.myhelp
@@ -111,7 +111,7 @@ while true; do
             ;;
 
         -f|--force)
-            force='-f'
+            force='1'
             shift
             ;;
 
@@ -155,13 +155,13 @@ if [[ ! -d "${config_dir}" ]]; then
     mkdir "${config_dir}"
 fi
 
-cp "${force}" "${src_dir}"/packages.yaml.DEFAULT "${config_dir}"/packages.yaml
-cp "${force}" "${src_dir}"/myhelp.sh "${bin_dir}"
+cp -f "${src_dir}"/packages.yaml.DEFAULT "${config_dir}"/packages.yaml
+cp -f "${src_dir}"/myhelp.sh "${bin_dir}"
 chmod u+x "${bin_dir}"/myhelp.sh
-cp "${force}" "${src_dir}"/myhelp.py "${bin_dir}"
+cp -f "${src_dir}"/myhelp.py "${bin_dir}"
 chmod u+x "${bin_dir}"/myhelp.py
 
-if [[ ! -f "${rc_file}" ]] || [[ "${force}" = '-f' ]]; then
+if [[ ! -f "${rc_file}" ]] || [[ -n "${force}" ]]; then
     cat >"${rc_file}" <<RC_END
 export MYHELP_DIR="${config_dir}"
 export MYHELP_PKG_DB="${config_dir}"/packages.db
@@ -176,7 +176,7 @@ fi
 
 source "${rc_file}"
 
-if [[ ! -f "${config_dir}/packages.db" ]] || [[ "${force}" = '-f' ]]; then
+if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'
     python3 "${bin_dir}"/myhelp.py --refresh --interactive --standalone
     echo 'Initialization complete.'

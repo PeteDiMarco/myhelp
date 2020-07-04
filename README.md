@@ -1,4 +1,4 @@
-# MyHelp Commandline Utility
+# MyHelp Command Line Utility
 
 This is a help utility for Bash. It tries to identify every name provided. 
 MyHelp looks at man pages, info pages, aliases, files, shell variables,
@@ -25,8 +25,7 @@ It will also create the file `~/.myhelprc` and the directory `~/.myhelp`. `~/.my
 will contain an alias called `myhelp` which is used to run the application. Be sure to add
 `source ~/.myhelprc` to your `.bashrc` file.
 
-The directory `~/.myhelp` contains a database of packages installed on the machine and
-local to the user's account.
+The directory `~/.myhelp` contains a database of the names of the packages installed on the machine.
 
 To install over an existing installation, use:
     `./install.sh -f`
@@ -34,17 +33,59 @@ To install over an existing installation, use:
 You can customize the names of the alias, source directory, configuration directory,
 and bin directory with these commandline options:
 
-  -s, --src             Directory containing source files.
-  -c, --config          Configuration directory.
-  -t, --target          Directory to install files.
-  -a, --alias           User's alias for myhelp.
+    -s, --src     # Directory containing source files.  
+    -c, --config  # Configuration directory.  
+    -t, --target  # Directory to install files.  
+    -a, --alias   # User's alias for MyHelp.  
 
+
+### Configuring
+
+MyHelp uses 2 configuration files. `.myhelprc` contains shell variables and the alias
+used to call the application. `packages.yaml` contains the commands needed to read and
+parse the names of the various packages installed on the computer.
+
+#### packages.yaml
+
+##### Schema:
+
+`version: 1`	# *Should always equal 1.* <br/>
+`packages:` <br/>
+&nbsp;&nbsp; *package-manager-name*: <br/>
+&nbsp;&nbsp;&nbsp;&nbsp; `description:` 'String describing the type of package.' <br/>
+&nbsp;&nbsp;&nbsp;&nbsp; `command:` "Shell command returning the name of each package, 1 per line."
+
+To add support for another package manager, add the name of the package manager executable (indented)
+followed by a colon. On the next line, provide a `description:` of the package type in quotes. The third line
+should contain the shell `command:` needed to extract the names of all the packages handled by the package manager.
+The shell command should return one name per line.
+
+MyHelp will use `which` to confirm that it has access to the package manager executable. If it does, it will execute
+the command. MyHelp checks the return code of the last command in the pipeline to determine if the command was
+successful. If the return code is not 0, it will assume that the command has failed. Please note:
+1.  MyHelp will not detect errors that occur earlier in the command pipeline unless you add `set -o pipefail;` to
+the beginning of your command.
+2.  Returning a non-zero value does not always mean that an actual error has occurred. E.g.: `grep` returns 1 if
+it's unable to find its pattern in the input stream.
+
+##### Example:
+
+    packages:
+      pip:
+        description: 'Python package'
+        command: "pip list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+
+The Python package manage `pip` is called with the `list` command. Output to standard error is ignored. The first
+2 lines of output are ignored because they contain header information. Finally, all the text after the first 2 spaces
+is stripped away (this is the package's version information).
 
 ### Uninstalling
 
 Run `./uninstall.sh`.
 
 ## Description
+
+MyHelp is composed of 2 scripts.
 
 ### myhelp.sh
 
