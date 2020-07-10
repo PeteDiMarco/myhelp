@@ -62,7 +62,6 @@ else
   exit 1
 fi
 
-
 {
   # Check aliases in the current shell.
   echo "###alias###"
@@ -129,6 +128,7 @@ fi
     shift
   done
 } > "${temp_file}"
+# Can't pipe subshell directly to myhelp.py because `terms` and `flags` would become local
+# to the subshell. Do not double quote `terms` or `flags` below:
 myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
 rm -f "${temp_file}"
-

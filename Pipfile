@@ -9,6 +9,7 @@ isort = "*"
 
 [packages]
 pyyaml = "*"
+psutil = "*"
 
 [requires]
 python_version = "3.6"
