@@ -10,7 +10,7 @@ packages:
 
   snap:
     description: 'Snap package'
-    command: "snap list --all | sed -e 's/ .*$//'"
+    command: "snap list --all | tail +2 | sed -e 's/ .*$//' | sort | uniq"
 
   rpm:
     description: 'Red Hat package'
