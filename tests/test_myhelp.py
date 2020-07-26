@@ -70,6 +70,7 @@ def test_PackageViewer():
     yaml_file = os.environ["MYHELP_PKG_YAML"]
     packages = myhelp.PackageViewer(db_file, yaml_file, reload=True, feedback=True)
     assert len(packages.search("python3")) > 0
+    assert len(packages["python"]) > 0
 
 
 def test_DeviceViewer():
@@ -84,12 +85,13 @@ def test_DeviceViewer():
 
 def test_CmdViewer():
     cmd = myhelp.CmdViewer("echo", 'echo "%s"', 0, False, (lambda target, result: [ f"{target}={result}" ]), False)
-    assert cmd("TEST") == ["TEST=TEST"]
+    assert cmd["TEST"] == ["TEST=TEST"]
 
 
 def test_glob_to_regex():
     regex = myhelp.glob_to_regex("apple*jack")
     assert regex.search("apple    jack") is not None
+    assert regex.search("squids") is None
 
 
 def test_init_cmd_viewer():

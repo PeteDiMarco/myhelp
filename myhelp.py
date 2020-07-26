@@ -38,6 +38,7 @@ import itertools
 import shlex
 from enum import auto, IntEnum
 from typing import Pattern
+import textwrap
 
 # Defaults:
 PROGRAM_NAME = os.path.basename(sys.argv[0])
@@ -47,7 +48,6 @@ man pages, info pages, executables in PATH, aliases, shell variables, running
 processes, shell functions, built-in shell commands, packages, filesystems,
 and files relative to the current working directory."""
 
-EPILOG = ""
 DEBUG = False
 
 
@@ -217,7 +217,7 @@ class ProcessViewer(PatternCounter):
         """
         If item is in Counter, return a list of 1 message about item. Else return an empty list.
         :param item: str name of process.
-        :return: list of 1 or 1 strings.
+        :return: list of 0 or 1 strings.
         """
         count = super().__getitem__(item)
         return ProcessViewer.format(count, item)
@@ -341,7 +341,7 @@ class PackageViewer:
                 int(pkg_data["version"]) == PackageViewer.YAML_FILE_VERSION
             )  # Ensure we recognize the version of the YAML file.
             for key, val in pkg_data["packages"].items():
-                if run_cmd(f"which {key}").strip():  # If the command is executable:
+                if run_cmd(f"which {key}", [1]).strip():  # If the command is executable:
                     pkg_list = run_cmd(
                         val["command"]
                     ).splitlines()  # Command should return 1 package name per line.
@@ -356,6 +356,17 @@ class PackageViewer:
         self.conn.commit()
         if spinner:
             spinner.stop()
+
+    def __getitem__(self, target: str):
+        """
+        Searches the package name database for `target`. Does not accept globs.
+        :param target: string name to search for.
+        :return: list of strings.
+        """
+        self.cursor.execute(
+            f"SELECT * FROM {PackageViewer.DB_TABLE} WHERE Name=?", (target,)
+        )
+        return [f"{target} is a {record[2]}." for record in self.cursor.fetchall()]
 
     def search(self, target: str):
         """
@@ -396,6 +407,11 @@ class DeviceViewer:
             self._devices.update([elt.device])
             self._mount_points.update([elt.mountpoint])
             self._fstypes.update([elt.fstype])
+
+    def __str__(self):
+        return "DeviceViewer(" + "\n".join(["_devices: " + str(self._devices),
+               "_mount_points: " + str(self._mount_points), 
+               "_fstypes: " + str(self._fstypes)]) + ")"
 
     def __getitem__(self, item):
         """
@@ -514,7 +530,7 @@ class BuiltInViewer:
         match = re.search(r"^alias ([^=]*)=(.*)$", line)
         if match:
             self.results[BuiltInViewer.Cmd.ALIAS.name].append(
-                (match.group(1), f'{match.group(1)} is aliased to "{match.group(2)}".')
+                (match.group(1), f'{match.group(1)} is aliased to {match.group(2)}.')
             )
         else:
             raise ValueError(line)
@@ -656,16 +672,12 @@ class CmdViewer:
         else:
             raise ValueError(f'Bad value for ignore_rc ({ignore_rc}).')
 
-    def __call__(self, target: str):
+    def __getitem__(self, target: str):
         """
-        Search for target, which is a literal string.
+        Search for `target`, which is a literal string.
         :param target: str.
         :return: list of str.
         """
-        if "*" in target:
-            print(
-                f'WARNING: Treating "*" in "{target}" as a literal character, not a glob.'
-            )
         # Escape the shell command before running it.
         result = run_cmd(
             self.cmd_string % shlex.quote(target),
@@ -676,7 +688,7 @@ class CmdViewer:
 
     def search(self, pattern: str):
         """
-        If this command accepts globs,
+        If this command accepts globs, search for `pattern`.
         :param pattern: str (may be a glob).
         :return:
         """
@@ -702,7 +714,29 @@ def glob_to_regex(pattern: str):
         clean_pat = ".*".join(map(re.escape, pattern.split("*")))
     else:
         clean_pat = re.escape(pattern)
+    if DEBUG:
+        print(f"glob_to_regex: {pattern} -> {clean_pat}")
     return re.compile("^" + clean_pat + "$")
+
+
+def a_or_an(word: str, lowercase: bool = True):
+    """
+    Returns "an" if `word` starts with a, e, i, o, or u. Otherwise returns "a".
+    May not be compatible with British English.
+    :param word: str
+    :param lowercase: bool
+    :return: str
+    """
+    if lowercase:
+        a = "a"
+        an = "an"
+    else:
+        a = "A"
+        an = "An"
+    if word[0].lower() in ["a", "e", "i", "o", "u"]:
+        return an
+    else:
+        return a
 
 
 def print_results(results, term):
@@ -733,13 +767,21 @@ def init_cmd_viewers():
         :return: list of 0 or 1 strings.
         """
         # Accepts globs
-        if "No such file or directory" in result:
-            return []
-        if result == "directory":
-            return [f"{token} is a {result}."]
-        elif result:
-            return [f"{token} is a(n) {result} file."]
-        return []
+        retval = []
+        lines = result.splitlines()
+        for line in lines:
+            match = re.search(r"^([^:]*):\s+(.*)$", line)
+            if match:
+                target = match.group(1)
+                is_a = match.group(2)
+                article = a_or_an(is_a)
+                if "No such file or directory" in is_a:
+                    pass
+                elif is_a == "directory":
+                    retval.append(f"{target} is a directory.")
+                else:
+                    retval.append(f"{target} is {article} {is_a} file.")
+        return retval
 
     def df(token: str, result: str):
         """
@@ -754,7 +796,7 @@ def init_cmd_viewers():
         if lines:
             for line in lines[1:]:
                 retval.append(
-                    "%s is on filesystem %s (type %s)." % tuple([token] + line.split())
+                    "%s is on filesystem %s (type %s)." % tuple(line.split())
                 )
         return retval
 
@@ -804,7 +846,7 @@ def init_cmd_viewers():
             lambda target, result: [f"There is a service named {target}."] if result else [],
             False,
         ),
-        CmdViewer("file", "file -b %s", [], True, file, True),
+        CmdViewer("file", "file %s", "*", True, file, True),
         CmdViewer(
             "xdg-mime",
             "xdg-mime query filetype %s 2>/dev/null",
@@ -813,7 +855,7 @@ def init_cmd_viewers():
             lambda target, result: [f"{target} has the MIME type {result}."] if result else [],
             False,  # No globs
         ),
-        CmdViewer("df", "df --output=source,fstype %s 2>/dev/null", "*", True, df, True),
+        CmdViewer("df", "df --output=file,source,fstype %s 2>/dev/null", "*", True, df, True),
         CmdViewer(
             "info",
             "info -w %s",
@@ -837,6 +879,11 @@ def init_cmd_viewers():
 
 
 if __name__ == "__main__":
+    cmd_viewers = init_cmd_viewers()
+    no_patterns = sorted([cmd.cmd_name for cmd in cmd_viewers if not cmd.glob_able])
+    EPILOG = """Pattern searches use `globs`. Pattern searches cannot be performed with the
+following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns)), "    ")
+
     # Parse command line arguments:
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -859,7 +906,8 @@ if __name__ == "__main__":
         help="Refresh package cache.",
     )
     parser.add_argument(
-        "-p", "--pattern", action="append", help="Search for glob pattern."
+        "-p", "--pattern", action="append",
+        help="Search for glob pattern. The pattern should be wrapped in quotes."
     )
     parser.add_argument(
         "-s",
@@ -906,24 +954,29 @@ if __name__ == "__main__":
     packages = PackageViewer(
         db_file, yaml_file, reload=refresh, feedback=args.interactive
     )
-    cmd_viewers = init_cmd_viewers()
 
     for term in args.terms:
+        term = term.strip("'")
+        if "*" in term:
+            print(
+                f'WARNING: Treating "*" in "{term}" as a literal character, not a glob.'
+            )
         # Scan for each search term:
         results = (
-            packages.search(term)
+            packages[term]
             + devices[term]
             + processes[term]
             # + open_files[term]
         )
         for viewer in cmd_viewers:
-            results.extend(viewer(term))
+            results.extend(viewer[term])
         if builtins:
-            results.extend(builtins.search(term))
+            results.extend(builtins[term])
         print_results(results, term)
 
     for pattern in args.pattern:
         # Scan for each search pattern (glob):
+        pattern = pattern.strip("'")
         patt_re = glob_to_regex(pattern)
         results = (
             packages.search(pattern)

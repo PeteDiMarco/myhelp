@@ -8,6 +8,7 @@ devices, filesystems, running processes, and built-in shell commands.
 
 * Python 3.6 or above
 * Bash
+* which
 
 #### Optional
 * getent
@@ -16,7 +17,6 @@ devices, filesystems, running processes, and built-in shell commands.
 * file
 * info
 * man
-* which
 
 ### Installing
 

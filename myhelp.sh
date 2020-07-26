@@ -94,33 +94,36 @@ fi
   while [[ $# -ne 0 ]]; do
     if [[ -z "$1" ]]; then	# Skip over blanks.
       echo # NOP
+    elif [[ "$1" = "-D" ]] || [[ "$1" = "--DEBUG" ]]; then
+      flags+=( "$1" )
+      DEBUG=true
     elif [[ "$1" = "--" ]]; then
       shift
       # push all remaining as terms
       while [[ $# -ne 0 ]]; do
         # push term
-        terms+=( "$1" )
-        retval=$(type -a "$1" 2>/dev/null)
+        terms+=( "'$1'" )
+        retval=$(type -a "'$1'" 2>/dev/null)
         if [[ $? -eq 0 ]]; then
           echo "$retval"
         fi
         shift
       done
       break
-    elif [[ "$1" = '-p' ]] || [[ "$1" =~ ^--p ]]; then
+    elif [[ "$1" = '-p' ]] || [[ "$1" =~ ^--pattern ]]; then
       # push flag
       flags+=( "$1" )
       shift
       # push flag argument
-      flags+=( "$1" )
+      flags+=( "'$1'" )
     elif [[ "$1" =~ ^- ]]; then
       # push flag
       flags+=( "$1" )
     else
       # push term
-      terms+=( "$1" )
+      terms+=( "'$1'" )
       # Use `type` built-in.
-      retval=$(type -a "$1" 2>/dev/null)
+      retval=$(type -a "'$1'" 2>/dev/null)
       if [[ $? -eq 0 ]]; then
         echo "$retval"
       fi
@@ -130,5 +133,8 @@ fi
 } > "${temp_file}"
 # Can't pipe subshell directly to myhelp.py because `terms` and `flags` would become local
 # to the subshell. Do not double quote `terms` or `flags` below:
+if [[ "${DEBUG}" = true ]]; then
+  echo myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
+fi
 myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
 rm -f "${temp_file}"
