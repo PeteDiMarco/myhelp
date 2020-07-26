@@ -1,6 +1,6 @@
 # MyHelp Command Line Utility
 
-This is a help utility for Bash. It tries to identify every name provided. 
+MyHelp is a help utility for Bash. It tries to identify every name provided. 
 MyHelp looks at man pages, info pages, aliases, files, shell variables,
 devices, filesystems, running processes, and built-in shell commands.
 
@@ -11,6 +11,7 @@ devices, filesystems, running processes, and built-in shell commands.
 
 #### Optional
 * getent
+* df
 * xdg-mime
 * file
 * info
@@ -22,8 +23,12 @@ devices, filesystems, running processes, and built-in shell commands.
 For a first time installation, simply run `./install.sh` from the source directory.
 This will install 2 scripts into your local bin directory (either `~/bin` or `~/.local/bin`).
 It will also create the file `~/.myhelprc` and the directory `~/.myhelp`. `~/.myhelprc`
-will contain an alias called `myhelp` which is used to run the application. Be sure to add
-`source ~/.myhelprc` to your `.bashrc` file.
+will contain an alias (called `myhelp` by default) which is used to run the application.
+Be sure to add `source ~/.myhelprc` to your `.bashrc` file, like this:
+
+    if [ -f ~/.myhelprc ]; then
+        source ~/.myhelprc
+    fi
 
 The directory `~/.myhelp` contains a database of the names of the packages installed on the machine.
 
@@ -38,21 +43,28 @@ and bin directory with these commandline options:
     -t, --target  # Directory to install files.  
     -a, --alias   # User's alias for MyHelp.  
 
-
 ### Configuring
 
 MyHelp uses 2 configuration files. `.myhelprc` contains shell variables and the alias
 used to call the application. `packages.yaml` contains the commands needed to read and
 parse the names of the various packages installed on the computer.
 
-#### packages.yaml
+#### .myhelprc
 
-##### Schema:
+    export MYHELP_DIR="${HOME}/.myhelp"
+    export MYHELP_PKG_DB="${MYHELP_DIR}/packages.db"
+    export MYHELP_PKG_YAML="${MYHELP_DIR}/packages.yaml"
+    export MYHELP_BIN_DIR="${HOME}/bin"
+    export MYHELP_REFRESH=0       # 0=Reload package database on every call, 1=Only reload with '-r'.
+    export MYHELP_ALIAS_NAME=myhelp
+    alias myhelp='source myhelp.sh'
+
+#### packages.yaml
 
 `version: 1`	# *Should always equal 1.* <br/>
 `packages:` <br/>
 &nbsp;&nbsp; *package-manager-name*: <br/>
-&nbsp;&nbsp;&nbsp;&nbsp; `description:` 'String describing the type of package.' <br/>
+&nbsp;&nbsp;&nbsp;&nbsp; `description:` "String describing the type of package." <br/>
 &nbsp;&nbsp;&nbsp;&nbsp; `command:` "Shell command returning the name of each package, 1 per line."
 
 To add support for another package manager, add the name of the package manager executable (indented)
@@ -75,20 +87,17 @@ it's unable to find its pattern in the input stream.
         description: 'Python package'
         command: "pip list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
 
-The Python package manage `pip` is called with the `list` command. Output to standard error is ignored. The first
+The Python package manager `pip` is called with the `list` command. Output to standard error is ignored. The first
 2 lines of output are ignored because they contain header information. Finally, all the text after the first 2 spaces
 is stripped away (this is the package's version information).
 
 ### Uninstalling
 
-Run `./uninstall.sh`.
+Run `./uninstall.sh`. Use `uninstall.sh -f` to delete the directory `~/.myhelp`.
 
 ## Description
 
-MyHelp is composed of 2 scripts.
-
-### myhelp.sh
-
+MyHelp is composed of 2 scripts. The first script is called `myhelp.sh`. `myhelp.sh` must be `source`d from the shell in order for MyHelp to read the current shell's aliases and settings. `myhelp.sh` then calls `myhelp.py`.
 
 ## Versioning
 
