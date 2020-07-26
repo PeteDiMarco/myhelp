@@ -13,3 +13,6 @@ psutil = "*"
 
 [requires]
 python_version = "3.6"
+
+PyYAML~=5.3.1
+psutil~=5.7.0

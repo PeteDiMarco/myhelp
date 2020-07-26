@@ -23,7 +23,7 @@
 # Description:
 #
 # Dependencies:
-# getent, xdg-mime, file, info, man, which
+# df, file, getent, info, man, which, xdg-mime
 
 import os
 import sys
@@ -35,6 +35,7 @@ import yaml
 import psutil
 import collections
 import itertools
+import shlex
 from enum import auto, IntEnum
 from typing import Pattern
 
@@ -74,6 +75,7 @@ class Spinner:
         sys.stdout.write(" ")  # overwrite spinner with blank
         sys.stdout.write("\r")  # move to next line
         sys.stdout.flush()
+        del self
 
 
 class PatternDict(dict):
@@ -128,42 +130,48 @@ class PatternCounter(collections.Counter):
         return results
 
 
-def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
+def run_cmd(
+    cmd_str: str,
+    ignore_rc=[0],
+    ignore_stderr: bool = True,
+    exit_on_error: bool = False,
+    env=None,
+):
     """
     Runs a shell command. Can ignore one or more return codes.
     :param cmd_str: Shell command to run.
-    :param ignore: Integer, string, or list of integers indicating return codes to ignore, or '*' to ignore all errors AND messages to stderr.
-    :param exit_on_error: Exit program if error occurs, else raises exception.
+    :param ignore_rc: Integer, string, or list of integers indicating return codes to ignore, or '*' to ignore all return codes.
+    :param ignore_stderr: bool. Ignore any output to stderr.
+    :param exit_on_error: bool. Exit program if error occurs, else raises exception.
     :param env: Dict of environment variables.
     :return: str
     :except subprocess.CalledProcessError
     :except ValueError
     """
     result = None
-    ignore_all = False
-    if isinstance(ignore, list):
-        if "*" in ignore:  # Ignore all return codes.
-            ignore_all = True
-        elif 0 not in ignore:  # Always ignore return code 0.
-            ignore.append(0)
-    elif isinstance(ignore, int):
-        ignore = [0, ignore]  # Always ignore return code 0.
-    elif ignore == "*":  # Ignore all return codes.
-        ignore_all = True
+    if ignore_rc == "*":  # Ignore all return codes.
+        ignore_rc = None
+    elif isinstance(ignore_rc, list):
+        if "*" in ignore_rc:  # Ignore all return codes.
+            ignore_rc = None
+        elif 0 not in ignore_rc:  # Always ignore return code 0.
+            ignore_rc.append(0)
+    elif isinstance(ignore_rc, int):
+        ignore_rc = [0, ignore_rc]  # Always ignore return code 0.
     else:
-        raise ValueError(ignore)
+        raise ValueError(ignore_rc)
 
     try:
         result = subprocess.run(
             cmd_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=env
         )
     except subprocess.CalledProcessError as e:
-        # "ignore" contains return codes that are not considered errors.
+        # "ignore_rc" contains return codes that are not considered errors.
         # For example: grep will return errno == 1 if it doesn't match any
         # lines in its input stream.  We want to ignore this case since it's
         # not really an error. Note: pipelines return the errno of the last command
         # by default. Use `set -o pipefail` to override this behavior.
-        if not ignore_all and e.returncode not in ignore:
+        if ignore_rc and e.returncode not in ignore_rc:
             if exit_on_error:
                 exit(e.returncode)
             else:
@@ -171,9 +179,11 @@ def run_cmd(cmd_str: str, ignore=[0], exit_on_error: bool = False, env=None):
                     returncode=e.returncode, cmd=cmd_str
                 )
     else:
-        if not ignore_all and (result.returncode not in ignore or result.stderr):
-            print(result.stderr)
+        if (ignore_rc and result.returncode not in ignore_rc) or (
+            not ignore_stderr and result.stderr
+        ):
             if exit_on_error:
+                # print(result.stderr)
                 exit(result.returncode if result.returncode != 0 else 1)
             else:
                 raise subprocess.CalledProcessError(
@@ -192,30 +202,38 @@ class ProcessViewer(PatternCounter):
     """
 
     def __init__(self):
+        # Read the name of every current process and store it in a Counter.
         super().__init__([proc.name() for proc in psutil.process_iter(attrs=["name"])])
 
-    def __getitem__(self, item):
-        count = super().__getitem__(item)
-        result = []
+    @staticmethod
+    def format(count: int, item: str):
         if count == 1:
-            result.append(f"There is 1 process called {item}.")
+            return [f"There is 1 process called {item}."]
         elif count > 1:
-            result.append(f"There are {count} processes called {item}.")
-        return result
+            return [f"There are {count} processes called {item}."]
+        return []
+
+    def __getitem__(self, item: str):
+        """
+        If item is in Counter, return a list of 1 message about item. Else return an empty list.
+        :param item: str name of process.
+        :return: list of 1 or 1 strings.
+        """
+        count = super().__getitem__(item)
+        return ProcessViewer.format(count, item)
 
     def search(self, pattern, return_tuple: bool = False):
         """
         Search for every process name that matches `pattern`.
-        :param pattern: regex
-        :param return_tuple: bool
+        :param pattern: regex or string glob.
+        :param return_tuple: bool (IGNORED).
         :return: list of messages about process names that match `pattern`.
         """
         results = []
+        if isinstance(pattern, str):
+            pattern = glob_to_regex(pattern)
         for key, val in super().search(pattern, return_tuple=True):
-            if val == 1:
-                results.append(f"There is 1 process called {key}.")
-            elif val > 1:
-                results.append(f"There are {val} processes called {key}.")
+            results.extend(ProcessViewer.format(val, key))
         return results
 
 
@@ -226,7 +244,7 @@ class OpenFileViewer(PatternCounter):
 
     def __init__(self):
         names = []
-        for line in run_cmd("lsof -b -F n 2>/dev/null", ignore=[0, 127]).splitlines():
+        for line in run_cmd("lsof -b -F n 2>/dev/null").splitlines():
             if line[0] == "n":
                 names.append(line[1:])
         super().__init__(names)
@@ -241,97 +259,21 @@ class OpenFileViewer(PatternCounter):
 
     def __getitem__(self, item):
         count = super().__getitem__(item)
-        result = []
-        if count == 1:
-            result.append(f"There is 1 open file called {item}.")
-        elif count > 1:
-            result.append(f"There are {count} open files called {item}.")
-        return result
+        return OpenFileViewer.format(count, item)
 
     def search(self, pattern, return_tuple: bool = False):
         """
         Search for every open file whose name matches `pattern`.
-        :param pattern:
-        :param return_tuple:
+        :param pattern: regex or string glob.
+        :param return_tuple: bool.
         :return: list of messages about open files that match `pattern`.
         """
         results = []
+        if isinstance(pattern, str):
+            pattern = glob_to_regex(pattern)
         for key, val in super().search(pattern, return_tuple=True):
-            if val == 1:
-                results.append(f"There is 1 open file called {key}.")
-            elif val > 1:
-                results.append(f"There are {val} open files called {key}.")
+            results.extend(OpenFileViewer.format(val, key))
         return results
-
-
-def get_ent_info(target: str):
-    """
-    Uses the `getent` command (if available) to scan the user, group, hosts,
-    and services databases for `target`. Does not accept globs.
-    :param target: string to search for.
-    :return: list of strings.
-    """
-    results = []
-    ignore_list = [0, 2, 127]
-    if run_cmd(f"getent passwd {target}", ignore=ignore_list):
-        results.append(f"There is a user named {target}.")
-    if run_cmd(f"getent group {target}", ignore=ignore_list):
-        results.append(f"There is a group named {target}.")
-    if run_cmd(f"getent hosts {target}", ignore=ignore_list):
-        results.append(f"There is a host named {target}.")
-    if run_cmd(f"getent services {target}", ignore=ignore_list):
-        results.append(f"There is a network service named {target}.")
-    return results
-
-
-def get_file_type(token: str):
-    """
-    Uses the `file` command (if available) to analyze `token`. Accepts globs.
-    :param token: string file name.
-    :return: list of strings.
-    """
-    result = run_cmd(f"file -b {token}", ignore=[0, 127])
-    if "No such file or directory" in result:
-        return []
-    if result == "directory":
-        return [f"{token} is a {result}."]
-    elif result:
-        return [f"{token} is a(n) {result} file."]
-    return []
-
-
-def get_mime_type(token: str):
-    """
-    Uses the `xdg-mime` command (if available) to determine the MIME type of
-    `token`. Only processes first argument if passed a glob.
-    :param token: string object name.
-    :return: list of 0 or 1 strings.
-    """
-    result = run_cmd(
-        f"xdg-mime query filetype {token} 2>/dev/null", ignore=[0, 2, 5, 127]
-    )
-    if result:
-        return [f"{term} has the MIME type {result}."]
-    return []
-
-
-def get_df_info(token: str):
-    """
-    Uses the `df` command (if available) to determine the name and type of the
-    filesystem that `token` resides on. Accepts globs.
-    :param token: string object name.
-    :return: list of strings.
-    """
-    retval = []
-    result = run_cmd(
-        f"df --output=source,fstype {token} 2>/dev/null", ignore="*"
-    ).splitlines()
-    if result:
-        for line in result[1:]:
-            retval.append(
-                "%s is on filesystem %s (type %s)." % tuple([token] + line.split())
-            )
-    return retval
 
 
 class PackageViewer:
@@ -399,9 +341,7 @@ class PackageViewer:
                 int(pkg_data["version"]) == PackageViewer.YAML_FILE_VERSION
             )  # Ensure we recognize the version of the YAML file.
             for key, val in pkg_data["packages"].items():
-                if run_cmd(
-                    f"which {key}", ignore=[0, 1]
-                ).strip():  # If the command is executable:
+                if run_cmd(f"which {key}").strip():  # If the command is executable:
                     pkg_list = run_cmd(
                         val["command"]
                     ).splitlines()  # Command should return 1 package name per line.
@@ -444,6 +384,10 @@ class PackageViewer:
 
 
 class DeviceViewer:
+    """
+    Searches all devices detected by psutil.disk_partitions.
+    """
+
     def __init__(self):
         self._devices = PatternCounter()
         self._mount_points = PatternCounter()
@@ -454,10 +398,19 @@ class DeviceViewer:
             self._fstypes.update([elt.fstype])
 
     def __getitem__(self, item):
+        """
+        Returns a list of all devices, file system types, and mount points called `item`.
+        :param item: str to search for.
+        :return: list of str.
+        """
         results = []
         results.extend(DeviceViewer.format("device", item, self._devices[item]))
-        results.extend(DeviceViewer.format("file system type", item, self._fstypes[item]))
-        results.extend(DeviceViewer.format("mount point", item, self._mount_points[item]))
+        results.extend(
+            DeviceViewer.format("file system type", item, self._fstypes[item])
+        )
+        results.extend(
+            DeviceViewer.format("mount point", item, self._mount_points[item])
+        )
         return results
 
     @staticmethod
@@ -469,7 +422,15 @@ class DeviceViewer:
         return []
 
     def search(self, pattern, return_tuple: bool = False):
+        """
+        Search
+        :param pattern: regex or string glob.
+        :param return_tuple: bool (IGNORED).
+        :return: list of str.
+        """
         results = []
+        if isinstance(pattern, str):
+            pattern = glob_to_regex(pattern)
         for key, val in self._devices.search(pattern, return_tuple=True):
             results.extend(DeviceViewer.format("device", key, val))
         for key, val in self._fstypes.search(pattern, return_tuple=True):
@@ -477,42 +438,6 @@ class DeviceViewer:
         for key, val in self._mount_points.search(pattern, return_tuple=True):
             results.extend(DeviceViewer.format("mount point", key, val))
         return results
-
-
-def has_info_page(token: str):
-    """
-    Checks if the `info` command (if available) has information on `token`. No globs.
-    :param token:
-    :return: list of 0 or 1 strings
-    """
-    result = run_cmd(f"info -w {token}", [127])
-    if result in ["", "dir", "*manpages*"] or result.startswith("././"):
-        return []
-    return [f"{term} has an info page."]
-
-
-def has_man_page(token: str):
-    """
-    Checks if the `man` command (if available) has information on `token`. No globs.
-    :param token:
-    :return: list of 0 or 1 strings
-    """
-    result = run_cmd(f"man --whatis {token} 2>/dev/null", ignore=[16, 127])
-    if bool(result):
-        return [f"{term} has a man page."]
-    return []
-
-
-def get_which_results(token: str):
-    """
-    Uses the `which` command (if available) to determine if `token` is executable. No globs.
-    :param token:
-    :return: list of strings
-    """
-    results = []
-    for line in run_cmd(f"which -a {token} 2>/dev/null", ignore=[1, 127]).splitlines():
-        results.append(f"{token} is the command {line}.")
-    return results
 
 
 class BuiltInViewer:
@@ -550,7 +475,7 @@ class BuiltInViewer:
         self.results = dict()
         for cmd in BuiltInViewer.Cmd.__members__.keys():
             self.results[cmd] = []
-        # Dispatch parsing based on command type:
+        # Dispatch parsing method based on command type:
         self._cmd_parser_ = {
             BuiltInViewer.Cmd.ALIAS.name.lower(): self._parse_alias,
             BuiltInViewer.Cmd.DECLARE.name.lower(): self._parse_declare,
@@ -656,6 +581,7 @@ class BuiltInViewer:
         :return: list of strings.
         """
         retval = []
+        # Iterate over shell command names.
         for key in self.results.keys():
             retval.extend(
                 [msg for (label, msg) in self.results[key] if label == target]
@@ -665,35 +591,249 @@ class BuiltInViewer:
     def search(self, pattern):
         """
         Search all results for `pattern`. Accepts string globs and regexes.
-        :param pattern: string glob to search for.
+        :param pattern: regex or string glob to search for.
         :return: list of strings.
         """
         retval = []
         if isinstance(pattern, str):
-            patt_re = glob_to_regex(pattern)
-        elif isinstance(pattern, Pattern):
-            patt_re = pattern
-        else:
-            raise ValueError(pattern)
-
+            pattern = glob_to_regex(pattern)
+        # Iterate over shell command names.
         for key in self.results.keys():
             retval.extend(
-                [msg for (label, msg) in self.results[key] if patt_re.search(label)]
+                [msg for (label, msg) in self.results[key] if pattern.search(label)]
             )
         return retval
 
 
+class CmdViewer:
+    """
+    Runs a shell command and returns a report.
+    """
+
+    CMD_OK = 0  # Command returned no error.
+    CMD_NOT_FOUND = 127 # Command not found by shell.
+
+    def __init__(
+        self,
+        cmd_name: str,
+        cmd_string: str,
+        ignore_rc,
+        ignore_stderr: bool,
+        function,
+        glob_able: bool,
+    ):
+        """
+        Create CmdViewer object.
+        :param cmd_name: str name of command to run.
+        :param cmd_string: str to pass to shell.
+        :param ignore_rc: list of return codes or single return code to ignore.
+        :param ignore_stderr: bool. Don't report error if stderr contains message.
+        :param function: function to format results of shell command.
+        :param glob_able: bool. Can pass a glob for pattern matching.
+        """
+        self.cmd_name = cmd_name
+        self.cmd_string = cmd_string
+        self.ignore_stderr = ignore_stderr
+        self.fn = function
+        self.glob_able = glob_able
+        if ignore_rc == "*":
+            self.ignore_rc = "*"
+        elif isinstance(ignore_rc, collections.Iterable):
+            # "*" means ignore all return codes.
+            if "*" in ignore_rc:
+                self.ignore_rc = "*"
+            else:
+                # Convert `ignore_rc` to a set, thus removing all duplicate elements.
+                # Then union that set with `CMD_OK` and `CMD_NOT_FOUND`. Finally, convert
+                # the set to a list.
+                self.ignore_rc = list(
+                    set(ignore_rc).union({CmdViewer.CMD_OK, CmdViewer.CMD_NOT_FOUND})
+                )
+        elif isinstance(ignore_rc, int):
+            self.ignore_rc = list(
+                {ignore_rc, CmdViewer.CMD_OK, CmdViewer.CMD_NOT_FOUND}
+            )
+        else:
+            raise ValueError(f'Bad value for ignore_rc ({ignore_rc}).')
+
+    def __call__(self, target: str):
+        """
+        Search for target, which is a literal string.
+        :param target: str.
+        :return: list of str.
+        """
+        if "*" in target:
+            print(
+                f'WARNING: Treating "*" in "{target}" as a literal character, not a glob.'
+            )
+        # Escape the shell command before running it.
+        result = run_cmd(
+            self.cmd_string % shlex.quote(target),
+            ignore_rc=self.ignore_rc,
+            ignore_stderr=self.ignore_stderr,
+        )
+        return self.fn(target, result)
+
+    def search(self, pattern: str):
+        """
+        If this command accepts globs,
+        :param pattern: str (may be a glob).
+        :return:
+        """
+        if self.glob_able:
+            result = run_cmd(
+                self.cmd_string % pattern,
+                ignore_rc=self.ignore_rc,
+                ignore_stderr=self.ignore_stderr,
+            )
+            return self.fn(pattern, result)
+        else:
+            raise ValueError(f'Pattern search not allowed for "{self.cmd_name}".')
+
+
 def glob_to_regex(pattern: str):
-    return re.compile("^" + pattern.replace("*", ".*") + "$")
+    """
+    Convert a string to a regex. If `pattern` contains "*", it is a glob.
+    :param pattern: str (may be glob).
+    :return: regex
+    """
+    if "*" in pattern:
+        # Replace all "*" with ".*":
+        clean_pat = ".*".join(map(re.escape, pattern.split("*")))
+    else:
+        clean_pat = re.escape(pattern)
+    return re.compile("^" + clean_pat + "$")
 
 
 def print_results(results, term):
+    """
+    Print all results for `term`.
+    :param results: list of str or None.
+    :param term: str
+    :return: None
+    """
     if results:
         for res in results:
             print(res)
     else:
         print(f"Nothing found for {term}.")
     print()
+
+
+def init_cmd_viewers():
+    """
+    Initialize all CmdViewer objects.
+    :return: list of CmdViewer
+    """
+    def file(token: str, result: str):
+        """
+        Process the results of a `file` command.
+        :param token: str to examine.
+        :param result: str returned by `file` command.
+        :return: list of 0 or 1 strings.
+        """
+        # Accepts globs
+        if "No such file or directory" in result:
+            return []
+        if result == "directory":
+            return [f"{token} is a {result}."]
+        elif result:
+            return [f"{token} is a(n) {result} file."]
+        return []
+
+    def df(token: str, result: str):
+        """
+        Process the results of a `df` command.
+        :param token: str to examine.
+        :param result: multi-line str returned by `df` command.
+        :return: list of str.
+        """
+        # Accepts globs
+        retval = []
+        lines = result.splitlines()
+        if lines:
+            for line in lines[1:]:
+                retval.append(
+                    "%s is on filesystem %s (type %s)." % tuple([token] + line.split())
+                )
+        return retval
+
+    def which(token: str, result: str):
+        """
+        Process the results of a `which` command.
+        :param token: str to examine.
+        :param result: multi-line str returned by `df` command.
+        :return: list of str.
+        """
+        # No globs
+        retval = []
+        for line in result.splitlines():
+            retval.append(f"{token} is the command {line}.")
+        return retval
+
+    viewers = [
+        CmdViewer(
+            "getent passwd",
+            "getent passwd %s",
+            2,
+            True,
+            lambda target, result: [f"There is a user named {target}."] if result else [],
+            False,
+        ),
+        CmdViewer(
+            "getent group",
+            "getent group %s",
+            2,
+            True,
+            lambda target, result: [f"There is a group named {target}."] if result else [],
+            False,
+        ),
+        CmdViewer(
+            "getent hosts",
+            "getent hosts %s",
+            2,
+            True,
+            lambda target, result: [f"There is a host named {target}."] if result else [],
+            False,
+        ),
+        CmdViewer(
+            "getent services",
+            "getent services %s",
+            2,
+            True,
+            lambda target, result: [f"There is a service named {target}."] if result else [],
+            False,
+        ),
+        CmdViewer("file", "file -b %s", [], True, file, True),
+        CmdViewer(
+            "xdg-mime",
+            "xdg-mime query filetype %s 2>/dev/null",
+            "*",
+            True,
+            lambda target, result: [f"{target} has the MIME type {result}."] if result else [],
+            False,  # No globs
+        ),
+        CmdViewer("df", "df --output=source,fstype %s 2>/dev/null", "*", True, df, True),
+        CmdViewer(
+            "info",
+            "info -w %s",
+            [],
+            True,
+            lambda target, result: ([] if result in ["", "dir", "*manpages*"] or result.startswith("././") else
+                                    [f"{target} has an info page."]),
+            False,
+        ),
+        CmdViewer(
+            "man",
+            "man --whatis %s 2>/dev/null",
+            16,
+            True,
+            lambda target, result: [f"{term} has a man page."] if bool(result) else [],
+            False,
+        ),
+        CmdViewer("which", "which -a %s 2>/dev/null", 1, True, which, False),
+    ]
+    return viewers
 
 
 if __name__ == "__main__":
@@ -743,10 +883,15 @@ if __name__ == "__main__":
     DEBUG = args.DEBUG
     config_dir = os.environ["MYHELP_DIR"]
     if not os.path.isdir(config_dir):
+        # If config_dir doesn't exist, create it.
         os.mkdir(config_dir)
     db_file = os.environ["MYHELP_PKG_DB"]
     yaml_file = os.environ["MYHELP_PKG_YAML"]
     refresh = args.refresh or int(os.environ["MYHELP_REFRESH"]) == 1
+    if args.pattern is None:
+        args.pattern = []
+
+    # Initialize viewers:
     if args.standalone:
         builtins = None
     else:
@@ -757,44 +902,41 @@ if __name__ == "__main__":
     devices = DeviceViewer()
     if DEBUG:
         print(devices)
-    if args.pattern is None:
-        args.pattern = []
-    #open_files = OpenFileViewer()
-
+    # open_files = OpenFileViewer()
     packages = PackageViewer(
         db_file, yaml_file, reload=refresh, feedback=args.interactive
     )
+    cmd_viewers = init_cmd_viewers()
 
     for term in args.terms:
+        # Scan for each search term:
         results = (
-            get_file_type(term)
-            + get_mime_type(term)
-            + packages.search(term)
-            + has_info_page(term)
-            + has_man_page(term)
-            + get_which_results(term)
+            packages.search(term)
             + devices[term]
-            + get_ent_info(term)
-            + get_df_info(term)
             + processes[term]
-            #+ open_files[term]
+            # + open_files[term]
         )
+        for viewer in cmd_viewers:
+            results.extend(viewer(term))
         if builtins:
             results.extend(builtins.search(term))
         print_results(results, term)
 
     for pattern in args.pattern:
+        # Scan for each search pattern (glob):
         patt_re = glob_to_regex(pattern)
         results = (
-            get_file_type(pattern)
-            + packages.search(pattern)
+            packages.search(pattern)
             + devices.search(patt_re)
-            + get_df_info(pattern)
             + processes.search(patt_re)
-            #+ open_files.search(patt_re)
+            # + open_files.search(patt_re)
         )
+        for viewer in cmd_viewers:
+            if viewer.glob_able:
+                results.extend(viewer.search(pattern))
         if builtins:
             results.extend(builtins.search(patt_re))
         print_results(results, pattern)
 
     packages.close()
+

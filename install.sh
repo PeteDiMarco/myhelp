@@ -155,10 +155,11 @@ if [[ ! -d "${config_dir}" ]]; then
     mkdir "${config_dir}"
 fi
 
-cp -f "${src_dir}"/packages.yaml.DEFAULT "${config_dir}"/packages.yaml
-cp -f "${src_dir}"/myhelp.sh "${bin_dir}"
+cd "${src_dir}"
+cp -f packages.yaml.DEFAULT "${config_dir}"/packages.yaml
+cp -f myhelp.sh "${bin_dir}"
 chmod u+x "${bin_dir}"/myhelp.sh
-cp -f "${src_dir}"/myhelp.py "${bin_dir}"
+cp -f myhelp.py "${bin_dir}"
 chmod u+x "${bin_dir}"/myhelp.py
 
 if [[ ! -f "${rc_file}" ]] || [[ -n "${force}" ]]; then
@@ -175,6 +176,10 @@ RC_END
 fi
 
 source "${rc_file}"
+
+if type pipenv &>/dev/null; then
+    pipenv install &>/dev/null
+fi
 
 if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'

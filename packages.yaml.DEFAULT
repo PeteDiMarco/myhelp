@@ -29,7 +29,7 @@ packages:
     command: "pip2 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
 
   pip3:
-    description: 'Python package'
+    description: 'Python3 package'
     command: "pip3 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
 
   conda:
