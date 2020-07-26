@@ -103,7 +103,7 @@ fi
       while [[ $# -ne 0 ]]; do
         # push term
         terms+=( "'$1'" )
-        retval=$(type -a "'$1'" 2>/dev/null)
+        retval=$(type -a "$1" 2>/dev/null)
         if [[ $? -eq 0 ]]; then
           echo "$retval"
         fi
@@ -123,7 +123,7 @@ fi
       # push term
       terms+=( "'$1'" )
       # Use `type` built-in.
-      retval=$(type -a "'$1'" 2>/dev/null)
+      retval=$(type -a "$1" 2>/dev/null)
       if [[ $? -eq 0 ]]; then
         echo "$retval"
       fi
