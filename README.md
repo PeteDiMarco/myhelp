@@ -55,7 +55,7 @@ parse the names of the various packages installed on the computer.
     export MYHELP_PKG_DB="${MYHELP_DIR}/packages.db"
     export MYHELP_PKG_YAML="${MYHELP_DIR}/packages.yaml"
     export MYHELP_BIN_DIR="${HOME}/bin"
-    export MYHELP_REFRESH=0       # 0=Reload package database on every call, 1=Only reload with '-r'.
+    export MYHELP_REFRESH=0       # 0=Only reload with '-r', 1=Reload package database on every call.
     export MYHELP_ALIAS_NAME=myhelp
     alias myhelp='source myhelp.sh'
 
