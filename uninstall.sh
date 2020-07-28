@@ -111,6 +111,8 @@ while true; do
     esac
 done
 
+set -e
+
 if [[ "${force}" = '-f' ]]; then
     if [[ -d "${MYHELP_DIR}" ]]; then
         rm -rf "${MYHELP_DIR}"

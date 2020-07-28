@@ -301,13 +301,13 @@ class PackageViewer:
         self.conn = sqlite3.connect(db_file)
         self.cursor = self.conn.cursor()
         self.cursor.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
-            (PackageViewer.DB_TABLE,),
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '%s'"
+            % PackageViewer.DB_TABLE
         )
         if int(self.cursor.fetchone()[0]) == 0:
             self.cursor.execute(
-                "CREATE TABLE ? (Name text, Type text, Description text)",
-                (PackageViewer.DB_TABLE,),
+                "CREATE TABLE %s (Name text, Type text, Description text)"
+                % PackageViewer.DB_TABLE
             )
             reload = True
         if reload:

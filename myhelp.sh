@@ -131,6 +131,9 @@ fi
     shift
   done
 } > "${temp_file}"
+
+set -e
+
 # Can't pipe subshell directly to myhelp.py because `terms` and `flags` would become local
 # to the subshell. Do not double quote `terms` or `flags` below:
 if [[ "${DEBUG}" = true ]]; then

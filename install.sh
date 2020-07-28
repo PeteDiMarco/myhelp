@@ -145,6 +145,8 @@ while true; do
     esac
 done
 
+set -e
+
 if [[ "${bin_dir}" = '?' ]]; then
     echo 'Please specify a target directory.'
     echo
@@ -154,6 +156,10 @@ fi
 if [[ ! -d "${config_dir}" ]]; then
     mkdir "${config_dir}"
 fi
+
+bin_dir=$(realpath "${bin_dir}")
+config_dir=$(realpath "${config_dir}")
+src_dir=$(realpath "${src_dir}")
 
 cd "${src_dir}"
 cp -f packages.yaml.DEFAULT "${config_dir}"/packages.yaml
@@ -177,13 +183,18 @@ fi
 
 source "${rc_file}"
 
+set +e
+
 if type pipenv &>/dev/null; then
     pipenv install &>/dev/null
 fi
 
 if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'
-    python3 "${bin_dir}"/myhelp.py --refresh --interactive --standalone
-    echo 'Initialization complete.'
+    if python3 "${bin_dir}"/myhelp.py --refresh --interactive --standalone; then
+        echo 'Initialization complete.'
+    else
+        echo 'Initialization failed.'
+    fi
 fi
 
