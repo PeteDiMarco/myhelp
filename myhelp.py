@@ -519,7 +519,8 @@ class BuiltInViewer:
             if self._mode_ is None:
                 raise ValueError(line)
             # `_cmd_parser_` dispatches the correct parsing method.
-            self._cmd_parser_[self._mode_](line)
+            if len(line.strip()) > 0:
+                self._cmd_parser_[self._mode_](line)
 
     def _parse_alias(self, line: str):
         """
@@ -558,8 +559,9 @@ class BuiltInViewer:
 
     def _parse_set(self, line: str):
         """
-        Parses `set` commands for shell variable and function names.
-        :param line:
+        Parses `set` commands for shell variable and function names. Ignores
+        lines that don't match those patterns.
+        :param line: str
         :return:
         """
         match = re.search(r"^([a-zA-Z0-9_]+)=", line)
@@ -750,7 +752,7 @@ def print_results(results, term):
         for res in results:
             print(res)
     else:
-        print(f"Nothing found for {term}.")
+        print(f'Nothing found for "{term}".')
     print()
 
 
@@ -794,10 +796,13 @@ def init_cmd_viewers():
         retval = []
         lines = result.splitlines()
         if lines:
+            col2_index = lines[0].find("Filesystem")
+            col3_index = lines[0].find("Type")
             for line in lines[1:]:
-                retval.append(
-                    "%s is on filesystem %s (type %s)." % tuple(line.split())
-                )
+                filename = line[:col2_index].strip()
+                filesys = line[col2_index:col3_index].strip()
+                filetype = line[col3_index:].strip()
+                retval.append(f"{filename} is on filesystem {filesys} (type {filetype}).")
         return retval
 
     def which(token: str, result: str):
@@ -861,7 +866,7 @@ def init_cmd_viewers():
             "info -w %s",
             [],
             True,
-            lambda target, result: ([] if result in ["", "dir", "*manpages*"] or result.startswith("././") else
+            lambda target, result: ([] if target.strip() == "" or result in ["", "dir", "*manpages*"] or result.startswith("././") else
                                     [f"{target} has an info page."]),
             False,
         ),
@@ -881,7 +886,7 @@ def init_cmd_viewers():
 if __name__ == "__main__":
     cmd_viewers = init_cmd_viewers()
     no_patterns = sorted([cmd.cmd_name for cmd in cmd_viewers if not cmd.glob_able])
-    EPILOG = """Pattern searches use `globs`. Pattern searches cannot be performed with the
+    EPILOG = """Pattern searches use "globs". Pattern searches cannot be performed with the
 following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns)), "    ")
 
     # Parse command line arguments:
@@ -945,18 +950,18 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
     else:
         builtins = BuiltInViewer(sys.stdin)
     processes = ProcessViewer()
-    if DEBUG:
-        print(processes)
     devices = DeviceViewer()
-    if DEBUG:
-        print(devices)
     # open_files = OpenFileViewer()
     packages = PackageViewer(
         db_file, yaml_file, reload=refresh, feedback=args.interactive
     )
 
+    got_results = False
     for term in args.terms:
         term = term.strip("'")
+        if term == "":
+            continue
+        got_results = True
         if "*" in term:
             print(
                 f'WARNING: Treating "*" in "{term}" as a literal character, not a glob.'
@@ -977,6 +982,9 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
     for pattern in args.pattern:
         # Scan for each search pattern (glob):
         pattern = pattern.strip("'")
+        if pattern == "":
+            continue
+        got_results = True
         patt_re = glob_to_regex(pattern)
         results = (
             packages.search(pattern)
@@ -990,6 +998,9 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
         if builtins:
             results.extend(builtins.search(patt_re))
         print_results(results, pattern)
+
+    if not refresh and not got_results:
+        print(f'Nothing to search for. Use "{os.environ["MYHELP_ALIAS_NAME"]} -h" for help.')
 
     packages.close()
 

@@ -33,6 +33,8 @@
 # readlink, sed, sort, uniq, wc
 # ** Built-ins:
 # alias, declare, set, type
+#
+# DO NOT ADD "set -e" TO THIS SRIPT!
 
 # Defaults:
 DEBUG=false
@@ -132,12 +134,10 @@ fi
   done
 } > "${temp_file}"
 
-set -e
-
 # Can't pipe subshell directly to myhelp.py because `terms` and `flags` would become local
 # to the subshell. Do not double quote `terms` or `flags` below:
 if [[ "${DEBUG}" = true ]]; then
-  echo myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
+  echo myhelp.py ${flags[@]} "${terms[@]}" "< ${temp_file}"
 fi
-myhelp.py ${flags[@]} ${terms[@]} < "${temp_file}"
+myhelp.py ${flags[@]} "${terms[@]}" < "${temp_file}"
 rm -f "${temp_file}"

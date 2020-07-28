@@ -154,7 +154,7 @@ if [[ "${bin_dir}" = '?' ]]; then
 fi
 
 if [[ ! -d "${config_dir}" ]]; then
-    mkdir "${config_dir}"
+    mkdir -p "${config_dir}"
 fi
 
 bin_dir=$(realpath "${bin_dir}")
