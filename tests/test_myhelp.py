@@ -95,7 +95,16 @@ def test_glob_to_regex():
 
 
 def test_init_cmd_viewer():
+    my_dir = os.path.dirname(os.path.abspath(__file__))
+    good_file = f"{my_dir}/DUMMY FILE"
+    bad_file = good_file + "qwertyuiop"
+    good_result = []
+    bad_result = []
     cmds = myhelp.init_cmd_viewers()
     assert isinstance(cmds, list)
     for cmd in cmds:
         assert isinstance(cmd, myhelp.CmdViewer)
+        good_result.extend(cmd[good_file])
+        bad_result.extend(cmd[bad_file])
+    assert good_result != []
+    assert bad_result == []

@@ -818,6 +818,13 @@ def init_cmd_viewers():
             retval.append(f"{token} is the command {line}.")
         return retval
 
+    def info(token: str, result: str):
+        if token.strip() == "" or result in ["", "dir", "*manpages*"]:
+            return []
+        if os.path.abspath(token) == os.path.abspath(result):
+            return []
+        return [f"{token} has an info page."]
+
     viewers = [
         CmdViewer(
             "getent passwd",
@@ -861,15 +868,7 @@ def init_cmd_viewers():
             False,  # No globs
         ),
         CmdViewer("df", "df --output=file,source,fstype %s 2>/dev/null", "*", True, df, True),
-        CmdViewer(
-            "info",
-            "info -w %s",
-            [],
-            True,
-            lambda target, result: ([] if target.strip() == "" or result in ["", "dir", "*manpages*"] or result.startswith("././") else
-                                    [f"{target} has an info page."]),
-            False,
-        ),
+        CmdViewer("info", "info -w %s", [], True, info, False),
         CmdViewer(
             "man",
             "man --whatis %s 2>/dev/null",
