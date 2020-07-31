@@ -162,6 +162,7 @@ def run_cmd(
         raise ValueError(ignore_rc)
 
     try:
+        #print(f"run_cmd: {cmd_str}")
         result = subprocess.run(
             cmd_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=env
         )
@@ -695,8 +696,9 @@ class CmdViewer:
         :return:
         """
         if self.glob_able:
+            #print(f"search: pattern={self.cmd_string % escape_space(pattern)}")
             result = run_cmd(
-                self.cmd_string % pattern,
+                self.cmd_string % escape_space(pattern),
                 ignore_rc=self.ignore_rc,
                 ignore_stderr=self.ignore_stderr,
             )
@@ -719,6 +721,32 @@ def glob_to_regex(pattern: str):
     if DEBUG:
         print(f"glob_to_regex: {pattern} -> {clean_pat}")
     return re.compile("^" + clean_pat + "$")
+
+
+def escape_space(string: str):
+    """
+    Returns a copy of `string` with all it's spaces prefixed with "\".
+    :param string: str
+    :return: str
+    """
+    if not string or " " not in string:
+        return string
+
+    length = len(string)
+    if length == 1:
+        return r"\ " if string == " " else string
+
+    result = ""
+    if string[0] == " ":
+        result = "\\"
+    for ind in range(length - 1):
+        if string[ind] != "\\" and string[ind + 1] == " ":
+            result += string[ind] + "\\"
+        else:
+            result += string[ind]
+    result += string[-1]
+
+    return result
 
 
 def a_or_an(word: str, lowercase: bool = True):
@@ -874,7 +902,7 @@ def init_cmd_viewers():
             "man --whatis %s 2>/dev/null",
             16,
             True,
-            lambda target, result: [f"{term} has a man page."] if bool(result) else [],
+            lambda target, result: [f"{target} has a man page."] if bool(result) else [],
             False,
         ),
         CmdViewer("which", "which -a %s 2>/dev/null", 1, True, which, False),
@@ -956,6 +984,29 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
     )
 
     got_results = False
+
+    for pattern in args.pattern:
+        # Scan for each search pattern (glob):
+        if DEBUG:
+            print(f"Checking pattern {pattern}")
+        pattern = pattern.strip("'")
+        if pattern == "":
+            continue
+        got_results = True
+        patt_re = glob_to_regex(pattern)
+        results = (
+            packages.search(pattern)
+            + devices.search(patt_re)
+            + processes.search(patt_re)
+            # + open_files.search(patt_re)
+        )
+        for viewer in cmd_viewers:
+            if viewer.glob_able:
+                results.extend(viewer.search(pattern))
+        if builtins:
+            results.extend(builtins.search(patt_re))
+        print_results(results, pattern)
+
     for term in args.terms:
         term = term.strip("'")
         if term == "":
@@ -977,26 +1028,6 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
         if builtins:
             results.extend(builtins[term])
         print_results(results, term)
-
-    for pattern in args.pattern:
-        # Scan for each search pattern (glob):
-        pattern = pattern.strip("'")
-        if pattern == "":
-            continue
-        got_results = True
-        patt_re = glob_to_regex(pattern)
-        results = (
-            packages.search(pattern)
-            + devices.search(patt_re)
-            + processes.search(patt_re)
-            # + open_files.search(patt_re)
-        )
-        for viewer in cmd_viewers:
-            if viewer.glob_able:
-                results.extend(viewer.search(pattern))
-        if builtins:
-            results.extend(builtins.search(patt_re))
-        print_results(results, pattern)
 
     if not refresh and not got_results:
         print(f'Nothing to search for. Use "{os.environ["MYHELP_ALIAS_NAME"]} -h" for help.')

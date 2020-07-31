@@ -64,6 +64,90 @@ else
   exit 1
 fi
 
+bin_directory="${MYHELP_BIN_DIR}"
+
+# Make sure we have the correct version of get_opt:
+getopt --test > /dev/null
+if [[ $? -ne 4 ]]; then
+    echo "ERROR: This script requires the enhanced version of 'getopt'."
+    exit 4
+fi
+
+# Parse commandline options:
+OPTIONS='hDrp:siT:'
+LONGOPTIONS='help,DEBUG,refresh,pattern:,standalone,interactive,TEST:'
+
+PARSED=$(getopt --options="${OPTIONS}" --longoptions="${LONGOPTIONS}" --name "$0" -- "$@")
+if [[ $? -ne 0 ]]; then
+    # If getopt has complained about wrong arguments to stdout:
+    exit 2
+fi
+
+# Read getopt's output this way to handle the quoting right:
+eval set -- "${PARSED}"
+
+echo "###type###" > "${temp_file}"
+
+# Process options in order:
+while [[ $# -ne 0 ]]; do
+  case "$1" in
+    -D|--DEBUG)
+      flags+=( "$1" )
+      DEBUG=true
+      shift
+      ;;
+
+    -p|--pattern)
+      # push flag
+      flags+=( "$1" )
+      shift
+      # push flag argument
+      flags+=( "'$1'" )
+      shift
+      ;;
+
+    -T|--TEST)
+      shift
+      # Override bin directory for testing.
+      bin_directory="$1"
+      shift
+      ;;
+
+    --)
+      shift
+      # push all remaining as terms
+      while [[ $# -ne 0 ]]; do
+        # push term
+        terms+=( "'$1'" )
+        # Use `type` built-in.
+        retval=$(type -a "$1" 2>/dev/null)
+        if [[ $? -eq 0 ]]; then
+          echo "$retval" >> "${temp_file}"
+        fi
+        shift
+      done
+      ;;
+
+    -*)
+      # push flag
+      flags+=( "$1" )
+      shift
+      ;;
+
+    *)
+      # push term
+      terms+=( "'$1'" )
+      # Use `type` built-in.
+      retval=$(type -a "$1" 2>/dev/null)
+      if [[ $? -eq 0 ]]; then
+        echo "$retval" >> "${temp_file}"
+      fi
+      shift
+      ;;
+  esac
+done
+
+
 {
   # Check aliases in the current shell.
   echo "###alias###"
@@ -89,55 +173,12 @@ fi
   if [[ $? -ne 0 ]]; then
     echo "Error reading declarations -F ($?)" 1>&2
   fi
-
-  # Check types in the current shell.
-  echo "###type###"
-  # Iterate through all remaining arguments.
-  while [[ $# -ne 0 ]]; do
-    if [[ -z "$1" ]]; then	# Skip over blanks.
-      echo # NOP
-    elif [[ "$1" = "-D" ]] || [[ "$1" = "--DEBUG" ]]; then
-      flags+=( "$1" )
-      DEBUG=true
-    elif [[ "$1" = "--" ]]; then
-      shift
-      # push all remaining as terms
-      while [[ $# -ne 0 ]]; do
-        # push term
-        terms+=( "'$1'" )
-        retval=$(type -a "$1" 2>/dev/null)
-        if [[ $? -eq 0 ]]; then
-          echo "$retval"
-        fi
-        shift
-      done
-      break
-    elif [[ "$1" = '-p' ]] || [[ "$1" =~ ^--pattern ]]; then
-      # push flag
-      flags+=( "$1" )
-      shift
-      # push flag argument
-      flags+=( "'$1'" )
-    elif [[ "$1" =~ ^- ]]; then
-      # push flag
-      flags+=( "$1" )
-    else
-      # push term
-      terms+=( "'$1'" )
-      # Use `type` built-in.
-      retval=$(type -a "$1" 2>/dev/null)
-      if [[ $? -eq 0 ]]; then
-        echo "$retval"
-      fi
-    fi
-    shift
-  done
-} > "${temp_file}"
+} >> "${temp_file}"
 
 # Can't pipe subshell directly to myhelp.py because `terms` and `flags` would become local
 # to the subshell. Do not double quote `terms` or `flags` below:
 if [[ "${DEBUG}" = true ]]; then
-  echo myhelp.py ${flags[@]} "${terms[@]}" "< ${temp_file}"
+  echo "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" "< ${temp_file}"
 fi
-myhelp.py ${flags[@]} "${terms[@]}" < "${temp_file}"
+"${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" < "${temp_file}"
 rm -f "${temp_file}"

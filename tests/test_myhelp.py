@@ -83,6 +83,10 @@ def test_DeviceViewer():
 #    assert len(builtins["HOME"]) > 0
 
 
+def test_escape_space():
+    assert myhelp.escape_space("this is a test  ") == r"this\ is\ a\ test\ \ "
+
+
 def test_CmdViewer():
     cmd = myhelp.CmdViewer("echo", 'echo "%s"', 0, False, (lambda target, result: [ f"{target}={result}" ]), False)
     assert cmd["TEST"] == ["TEST=TEST"]
