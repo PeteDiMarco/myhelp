@@ -1,17 +1,18 @@
 Cram test file for MyHelp.
 
 Check .myhelprc:
-  $ cat ~/.myhelprc
-  export MYHELP_DIR=.* (re)
-  export MYHELP_PKG_DB=.*packages.db (re)
-  export MYHELP_PKG_YAML=.*packages.yaml (re)
-  export MYHELP_BIN_DIR=.* (re)
+  $ cd "${TESTDIR}"
+  $ cat tmp/.myhelprc
+  export MYHELP_DIR=* (glob)
+  export MYHELP_PKG_DB=*packages.db (glob)
+  export MYHELP_PKG_YAML=*packages.yaml (glob)
+  export MYHELP_BIN_DIR=* (glob)
   export MYHELP_REFRESH=[01] (re)
-  export MYHELP_ALIAS_NAME=.* (re)
-  alias .*='source myhelp\.sh' (re)
+  export MYHELP_ALIAS_NAME=* (glob)
+  alias *='source myhelp.sh' (glob)
 
 Check other installation files:
-  $ source ~/.myhelprc
+  $ source tmp/.myhelprc
   $ [ -d "${MYHELP_DIR}" ]
   $ [ -f "${MYHELP_PKG_DB}" ]
   $ [ -f "${MYHELP_PKG_YAML}" ]
@@ -20,8 +21,7 @@ Check other installation files:
   $ [ -f "${MYHELP_BIN_DIR}/myhelp.py" ]
 
 Check help:
-  $ cd "${TESTDIR}"
-  $ . ../myhelp.sh -T .. -h
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" -h
   usage: * [-h] [-D] [-r] [-p PATTERN] [-s] [-i] [NAME [NAME ...]] (glob)
   
   Identifies the names provided.  Tries every test imaginable.  Looks for:
@@ -56,7 +56,7 @@ Examine myhelp.t
   > myhelp\.t has the MIME type .*
   > myhelp\.t is on filesystem .*
   > HEREDOC
-  $ . ../myhelp.sh -T .. myhelp.t | grep -f "${TMPIN}" | wc -l
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" myhelp.t | grep -f "${TMPIN}" | wc -l
   3
 
 Examine ls
@@ -65,12 +65,12 @@ Examine ls
   > ls has a man page\.
   > ls is the command .*
   > HEREDOC
-  $ . ../myhelp.sh -T .. ls | grep -f "${TMPIN}" | wc -l
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" ls | grep -f "${TMPIN}" | wc -l
   3
 
 Examine alias
   $ alias MYHELP_SPLUNGE='whatever'
-  $ . ../myhelp.sh -T .. MYHELP_SPLUNGE | grep "MYHELP_SPLUNGE is aliased to 'whatever'\."
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" MYHELP_SPLUNGE | grep "MYHELP_SPLUNGE is aliased to 'whatever'\."
   MYHELP_SPLUNGE is aliased to 'whatever'.
 
 Examine python
@@ -81,7 +81,7 @@ Examine python
   > python is the command .*python\.
   > python is .*python\.
   > HEREDOC
-  $ . ../myhelp.sh -T .. python | grep -f "${TMPIN}" | wc -l  >"${TMPOUT}"
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" python | grep -f "${TMPIN}" | wc -l  >"${TMPOUT}"
   $ read MYHELP_X <"${TMPOUT}"
   $ [ "${MYHELP_X}" -ge 5 ]
 

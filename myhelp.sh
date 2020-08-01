@@ -38,6 +38,7 @@
 
 # Defaults:
 DEBUG=false
+bin_directory=
 #my_name=$(basename "$0")             # This script's name.
 my_shell=$(basename "$BASH")         # This script's shell.
 preferred_shell=$(basename "$SHELL") # User's shell from passwd.
@@ -56,15 +57,6 @@ trap "rm -f $temp_file" 0 2 3 15
 if [[ ${SOURCED} -eq 0 ]]; then
   echo "WARNING: Shell aliases will not be scanned."
 fi
-
-if [[ -f "${rc_file}" ]]; then
-  source "${rc_file}"
-else
-  echo "ERROR: Can't find ${rc_file}!"
-  exit 1
-fi
-
-bin_directory="${MYHELP_BIN_DIR}"
 
 # Make sure we have the correct version of get_opt:
 getopt --test > /dev/null
@@ -108,8 +100,9 @@ while [[ $# -ne 0 ]]; do
 
     -T|--TEST)
       shift
-      # Override bin directory for testing.
+      # Override bin directory and rc file location for testing.
       bin_directory="$1"
+      rc_file="${bin_directory}"/.myhelprc
       shift
       ;;
 
@@ -148,6 +141,18 @@ while [[ $# -ne 0 ]]; do
 done
 
 
+if [[ -f "${rc_file}" ]]; then
+  source "${rc_file}"
+else
+  echo "ERROR: Can't find ${rc_file}!"
+  exit 1
+fi
+
+if [[ -z "${bin_directory}" ]]; then
+  bin_directory="${MYHELP_BIN_DIR}"
+fi
+
+
 {
   # Check aliases in the current shell.
   echo "###alias###"
@@ -182,3 +187,4 @@ if [[ "${DEBUG}" = true ]]; then
 fi
 "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" < "${temp_file}"
 rm -f "${temp_file}"
+

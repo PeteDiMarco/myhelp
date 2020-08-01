@@ -23,11 +23,13 @@
 
 # Defaults:
 DEBUG=false
+test_mode=false
 force=
 my_name=$(basename "$0")     # This script's name.
 src_dir=$(pwd)
 config_dir="${HOME}"/.myhelp
-rc_file="${HOME}"/.myhelprc
+rc_filename=.myhelprc
+rc_file="${HOME}"/"${rc_filename}"
 cmd_alias='myhelp'
 
 if [[ -d "${HOME}/bin" ]]; then
@@ -57,7 +59,7 @@ print_help () {
     fi
     cat <<HelpInfoHERE
 Usage: ${my_name} [-h] [-D] [-f] [-s SOURCE_DIR] [-c CONFIGURATION_DIR]
-                  [-t TARGET_DIR] [-a ALIAS]
+                  [-t TARGET_DIR] [-a ALIAS] [-T]
 
 Installs the myhelp application in the user's local directory.
 
@@ -69,6 +71,7 @@ Optional Arguments:
   -c, --config          Configuration directory. Defaults to ${config_dir}.
   -t, --target          Directory to install files. ${msg}
   -a, --alias           User's alias for myhelp. Defaults to ${cmd_alias}.
+  -T, --TEST            Test mode.
 HelpInfoHERE
     exit 0
 }
@@ -86,8 +89,8 @@ if [[ $? -ne 4 ]]; then
 fi
 
 # Parse commandline options:
-OPTIONS='hDfs:c:t:a:'
-LONGOPTIONS='help,DEBUG,force,src:,config:,target:,alias:'
+OPTIONS='hDfs:c:t:a:T'
+LONGOPTIONS='help,DEBUG,force,src:,config:,target:,alias:,TEST'
 
 PARSED=$(getopt --options="${OPTIONS}" --longoptions="${LONGOPTIONS}" --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
@@ -133,6 +136,11 @@ while true; do
             shift
             ;;
 
+        -T|--TEST)
+            shift
+            test_mode=true
+            ;;
+
         -a|--alias)
             shift
             cmd_alias="$1"
@@ -161,6 +169,10 @@ bin_dir=$(realpath "${bin_dir}")
 config_dir=$(realpath "${config_dir}")
 src_dir=$(realpath "${src_dir}")
 
+if [[ "${test_mode}" = true ]]; then
+    rc_file="${bin_dir}"/"${rc_filename}"
+fi
+
 cd "${src_dir}"
 cp -f packages.yaml.DEFAULT "${config_dir}"/packages.yaml
 cp -f myhelp.sh "${bin_dir}"
@@ -178,12 +190,19 @@ export MYHELP_REFRESH=0
 export MYHELP_ALIAS_NAME=${cmd_alias}
 alias ${cmd_alias}='source myhelp.sh'
 RC_END
-    echo 'Be sure to add "source '"${rc_file}"'" to your .bashrc file.'
+    if [[ "${test_mode}" = false ]]; then
+        echo 'Be sure to add "source '"${rc_file}"'" to your .bashrc file.'
+    fi
 fi
 
 source "${rc_file}"
 
 set +e
+
+interactive=
+if [[ "${test_mode}" = false ]]; then
+    interactive='--interactive'
+fi
 
 if type pipenv &>/dev/null; then
     pipenv install &>/dev/null
@@ -191,7 +210,7 @@ fi
 
 if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'
-    if python3 "${bin_dir}"/myhelp.py --refresh --interactive --standalone; then
+    if python3 "${bin_dir}"/myhelp.py --refresh "${interactive}" --standalone; then
         echo 'Initialization complete.'
     else
         echo 'Initialization failed.'
