@@ -153,8 +153,6 @@ while true; do
     esac
 done
 
-set -e
-
 if [[ "${bin_dir}" = '?' ]]; then
     echo 'Please specify a target directory.'
     echo
@@ -173,15 +171,16 @@ if [[ "${test_mode}" = true ]]; then
     rc_file="${bin_dir}"/"${rc_filename}"
 fi
 
-cd "${src_dir}"
-cp -f packages.yaml.DEFAULT "${config_dir}"/packages.yaml
-cp -f myhelp.sh "${bin_dir}"
-chmod u+x "${bin_dir}"/myhelp.sh
-cp -f myhelp.py "${bin_dir}"
-chmod u+x "${bin_dir}"/myhelp.py
+if [[ -f "${rc_file}" ]] && [[ -z "${force}" ]] && [[ "${test_mode}" = false ]]; then
+    read -p "\"${rc_file}\" file already exists. Overwrite it?" reply
+    if [[ ! "${reply}" =~ ^\ *[yY] ]]; then
+        echo "Installation aborted."
+        exit 0
+    fi
+    echo
+fi
 
-if [[ ! -f "${rc_file}" ]] || [[ -n "${force}" ]]; then
-    cat >"${rc_file}" <<RC_END
+cat >"${rc_file}" <<RC_END
 export MYHELP_DIR="${config_dir}"
 export MYHELP_PKG_DB="${config_dir}"/packages.db
 export MYHELP_PKG_YAML="${config_dir}"/packages.yaml
@@ -190,14 +189,24 @@ export MYHELP_REFRESH=0
 export MYHELP_ALIAS_NAME=${cmd_alias}
 alias ${cmd_alias}='source myhelp.sh'
 RC_END
-    if [[ "${test_mode}" = false ]]; then
-        echo 'Be sure to add "source '"${rc_file}"'" to your .bashrc file.'
-    fi
+
+if [[ "${test_mode}" = false ]]; then
+    echo 'Be sure to add the following to your ".bashrc" file if it is not already present:'
+    cat <<BASHRC_CODE
+if [ -f ~/.myhelprc ]; then
+    source ~/.myhelprc
+fi
+BASHRC_CODE
 fi
 
-source "${rc_file}"
+cd "${src_dir}"
+cp -f packages.yaml.DEFAULT "${config_dir}"/packages.yaml
+cp -f myhelp.sh "${bin_dir}"
+chmod u+x "${bin_dir}"/myhelp.sh
+cp -f myhelp.py "${bin_dir}"
+chmod u+x "${bin_dir}"/myhelp.py
 
-set +e
+source "${rc_file}"
 
 interactive=
 if [[ "${test_mode}" = false ]]; then
