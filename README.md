@@ -24,11 +24,15 @@ For a first time installation, simply run `./install.sh` from the source directo
 This will install 2 scripts into your local bin directory (either `~/bin` or `~/.local/bin`).
 It will also create the file `~/.myhelprc` and the directory `~/.myhelp`. `~/.myhelprc`
 will contain an alias (called `myhelp` by default) which is used to run the application.
+
 Be sure to add `source ~/.myhelprc` to your `.bashrc` file, like this:
 
     if [ -f ~/.myhelprc ]; then
         source ~/.myhelprc
     fi
+
+You will also need to run `source ~/.myhelprc` in any shell that was opened before
+installation.
 
 The directory `~/.myhelp` contains a database of the names of the packages installed on the machine.
 
