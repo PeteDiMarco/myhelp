@@ -101,7 +101,34 @@ Run `./uninstall.sh`. Use `uninstall.sh -f` to delete the directory `~/.myhelp`.
 
 ## Description
 
-MyHelp is composed of 2 scripts. The first script is called `myhelp.sh`. `myhelp.sh` must be `source`d from the shell in order for MyHelp to read the current shell's aliases and settings. `myhelp.sh` then calls `myhelp.py`.
+MyHelp is composed of 2 scripts. The first script is called `myhelp.sh`. `myhelp.sh`
+must be `source`d from the shell in order for MyHelp to read the current shell's
+aliases and settings. `myhelp.sh` then calls `myhelp.py`.
+
+    usage: myhelp [-h] [-D] [-r] [-p PATTERN] [-s] [-i] [NAME [NAME ...]]
+    
+    Identifies the names provided.  Tries every test imaginable.  Looks for:
+    man pages, info pages, executables in PATH, aliases, shell variables, running
+    processes, shell functions, built-in shell commands, packages, filesystems,
+    and files relative to the current working directory.
+    
+    positional arguments:
+      NAME                  Object to identify.
+    
+    optional arguments:
+      -h, --help            show this help message and exit
+      -D, --DEBUG           Enable debugging mode.
+      -r, --refresh         Refresh package cache.
+      -p PATTERN, --pattern PATTERN
+                            Search for glob pattern. The pattern should be wrapped
+                            in quotes.
+      -s, --standalone      Don't read shell builtins.
+      -i, --interactive     Show spinner when refreshing package cache.
+    
+    Pattern searches use "globs". Pattern searches cannot be performed with the
+    following commands:
+        getent group, getent hosts, getent passwd, getent services, info, man,
+        which, xdg-mime
 
 ## Versioning
 
