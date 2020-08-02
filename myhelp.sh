@@ -55,7 +55,7 @@ trap "rm -f $temp_file" 0 2 3 15
 (return 0 2>/dev/null) && SOURCED=1 || SOURCED=0
 
 if [[ ${SOURCED} -eq 0 ]]; then
-  echo "WARNING: Shell aliases will not be scanned."
+    echo "WARNING: Shell aliases will not be scanned."
 fi
 
 # Make sure we have the correct version of get_opt:
@@ -82,108 +82,108 @@ echo "###type###" > "${temp_file}"
 
 # Process options in order:
 while [[ $# -ne 0 ]]; do
-  case "$1" in
-    -D|--DEBUG)
-      flags+=( "$1" )
-      DEBUG=true
-      shift
-      ;;
+    case "$1" in
+        -D|--DEBUG)
+            flags+=( "$1" )
+            DEBUG=true
+            shift
+            ;;
 
-    -p|--pattern)
-      # push flag
-      flags+=( "$1" )
-      shift
-      # push flag argument
-      flags+=( "'$1'" )
-      shift
-      ;;
+        -p|--pattern)
+            # push flag
+            flags+=( "$1" )
+            shift
+            # push flag argument
+            flags+=( "'$1'" )
+            shift
+            ;;
 
-    -T|--TEST)
-      shift
-      # Override bin directory and rc file location for testing.
-      bin_directory="$1"
-      rc_file="${bin_directory}"/.myhelprc
-      shift
-      ;;
+        -T|--TEST)
+            shift
+            # Override bin directory and rc file location for testing.
+            bin_directory="$1"
+            rc_file="${bin_directory}"/.myhelprc
+            shift
+            ;;
 
-    --)
-      shift
-      # push all remaining as terms
-      while [[ $# -ne 0 ]]; do
-        # push term
-        terms+=( "'$1'" )
-        # Use `type` built-in.
-        retval=$(type -a "$1" 2>/dev/null)
-        if [[ $? -eq 0 ]]; then
-          echo "$retval" >> "${temp_file}"
-        fi
-        shift
-      done
-      ;;
+        --)
+            shift
+            # push all remaining as terms
+            while [[ $# -ne 0 ]]; do
+                # push term
+                terms+=( "'$1'" )
+                # Use `type` built-in.
+                retval=$(type -a "$1" 2>/dev/null)
+                if [[ $? -eq 0 ]]; then
+                    echo "$retval" >> "${temp_file}"
+                fi
+                shift
+            done
+            ;;
 
-    -*)
-      # push flag
-      flags+=( "$1" )
-      shift
-      ;;
+        -*)
+            # push flag
+            flags+=( "$1" )
+            shift
+            ;;
 
-    *)
-      # push term
-      terms+=( "'$1'" )
-      # Use `type` built-in.
-      retval=$(type -a "$1" 2>/dev/null)
-      if [[ $? -eq 0 ]]; then
-        echo "$retval" >> "${temp_file}"
-      fi
-      shift
-      ;;
-  esac
+        *)
+            # push term
+            terms+=( "'$1'" )
+            # Use `type` built-in.
+            retval=$(type -a "$1" 2>/dev/null)
+            if [[ $? -eq 0 ]]; then
+                echo "$retval" >> "${temp_file}"
+            fi
+            shift
+            ;;
+    esac
 done
 
 
 if [[ -f "${rc_file}" ]]; then
-  source "${rc_file}"
+    source "${rc_file}"
 else
-  echo "ERROR: Can't find ${rc_file}!"
-  exit 1
+    echo "ERROR: Can't find ${rc_file}!"
+    exit 1
 fi
 
 if [[ -z "${bin_directory}" ]]; then
-  bin_directory="${MYHELP_BIN_DIR}"
+    bin_directory="${MYHELP_BIN_DIR}"
 fi
 
 
 {
-  # Check aliases in the current shell.
-  echo "###alias###"
-  alias -p
-  if [[ $? -ne 0 ]]; then
-    echo "Error reading aliases ($?)" 1>&2
-  fi
+    # Check aliases in the current shell.
+    echo "###alias###"
+    alias -p
+    if [[ $? -ne 0 ]]; then
+        echo "Error reading aliases ($?)" 1>&2
+    fi
 
-  # Check aliases in the current shell.
-  echo "###set###"
-  set
-  if [[ $? -ne 0 ]]; then
-    echo "Error reading variables ($?)" 1>&2
-  fi
+    # Check aliases in the current shell.
+    echo "###set###"
+    set
+    if [[ $? -ne 0 ]]; then
+        echo "Error reading variables ($?)" 1>&2
+    fi
 
-  # Check aliases in the current shell.
-  echo "###declare###"
-  declare -p
-  if [[ $? -ne 0 ]]; then
-    echo "Error reading declarations -p ($?)" 1>&2
-  fi
-  declare -F
-  if [[ $? -ne 0 ]]; then
-    echo "Error reading declarations -F ($?)" 1>&2
-  fi
+    # Check aliases in the current shell.
+    echo "###declare###"
+    declare -p
+    if [[ $? -ne 0 ]]; then
+        echo "Error reading declarations -p ($?)" 1>&2
+    fi
+    declare -F
+    if [[ $? -ne 0 ]]; then
+        echo "Error reading declarations -F ($?)" 1>&2
+    fi
 } >> "${temp_file}"
 
 # Can't pipe subshell directly to myhelp.py because `terms` and `flags` would become local
-# to the subshell. Do not double quote `terms` or `flags` below:
+# to the subshell.
 if [[ "${DEBUG}" = true ]]; then
-  echo "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" "< ${temp_file}"
+    echo "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" "< ${temp_file}"
 fi
 "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" < "${temp_file}"
 rm -f "${temp_file}"
