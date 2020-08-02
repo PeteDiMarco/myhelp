@@ -84,7 +84,7 @@ the beginning of your command.
 2.  Returning a non-zero value does not always mean that an actual error has occurred. E.g.: `grep` returns 1 if
 it's unable to find its pattern in the input stream.
 
-##### Example:
+##### Example
 
     packages:
       pip:
@@ -104,6 +104,8 @@ Run `./uninstall.sh`. Use `uninstall.sh -f` to delete the directory `~/.myhelp`.
 MyHelp is composed of 2 scripts. The first script is called `myhelp.sh`. `myhelp.sh`
 must be `source`d from the shell in order for MyHelp to read the current shell's
 aliases and settings. `myhelp.sh` then calls `myhelp.py`.
+
+### Help
 
     usage: myhelp [-h] [-D] [-r] [-p PATTERN] [-s] [-i] [NAME [NAME ...]]
     
