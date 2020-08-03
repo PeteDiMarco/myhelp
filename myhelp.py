@@ -696,9 +696,9 @@ class CmdViewer:
         :return:
         """
         if self.glob_able:
-            #print(f"search: pattern={self.cmd_string % escape_space(pattern)}")
+            #print(f"search: pattern={self.cmd_string % escape_glob(pattern)}")
             result = run_cmd(
-                self.cmd_string % escape_space(pattern),
+                self.cmd_string % escape_glob(pattern),
                 ignore_rc=self.ignore_rc,
                 ignore_stderr=self.ignore_stderr,
             )
@@ -714,13 +714,42 @@ def glob_to_regex(pattern: str):
     :return: regex
     """
     if "*" in pattern:
-        # Replace all "*" with ".*":
+        # Replace all "*" with ".*". *** DOESN'T HANDLE ESCAPED "*" ***
         clean_pat = ".*".join(map(re.escape, pattern.split("*")))
     else:
         clean_pat = re.escape(pattern)
     if DEBUG:
         print(f"glob_to_regex: {pattern} -> {clean_pat}")
     return re.compile("^" + clean_pat + "$")
+
+
+def escape_glob(string: str):
+    """
+    Escape a file name that may contain globs without escaping the '*' characters themselves.
+    :param string: str
+    :return: str
+    """
+    split_pts = []
+    escape_on = False
+    # Search string for unescaped *'s:
+    for ind in range(len(string)):
+        chr = string[ind]
+        if escape_on:
+            escape_on = False
+        elif chr == r'\\':
+            escape_on = True
+        elif chr == r'*':
+            split_pts.append(ind)   # Found an unescaped "*". Record its index.
+    substrs = []
+    prev = 0
+    # Split string into substrings based on split_pts:
+    for ind in split_pts:
+        substrs.append(string[prev:ind])
+        prev = ind + 1
+    # Append the trailing substring:
+    substrs.append(string[prev:])
+    # Use `shlex.quote` on every substring, then glue together with "*":
+    return "*".join(map(shlex.quote, substrs))
 
 
 def escape_space(string: str):

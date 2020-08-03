@@ -85,3 +85,20 @@ Examine python
   $ read MYHELP_X <"${TMPOUT}"
   $ [ "${MYHELP_X}" -ge 5 ]
 
+Horrible filename:
+  $ tempfilex="S(q\"['u*d l\*y="
+  $ echo "splunge" > "${tempfilex}"
+  $ cat >"${TMPIN}" <<HEREDOC
+  > WARNING: Treating "*" in "S(q"['u*d l\*y=" as a literal character, not a glob.
+  > S(q"['u*d l\*y= is an ASCII text file.
+  > S(q"['u*d l\*y= has the MIME type text/plain.
+  > HEREDOC
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" "${tempfilex}" | grep -Ff "${TMPIN}" | wc -l  >"${TMPOUT}"
+  $ read MYHELP_X <"${TMPOUT}"
+  $ [ "${MYHELP_X}" -ge 3 ]
+
+Horrible name pattern search:
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" -p "${tempfilex}" | grep -Ff "${TMPIN}" | wc -l  >"${TMPOUT}"
+  $ read MYHELP_X <"${TMPOUT}"
+  $ [ "${MYHELP_X}" -ge 1 ]
+  $ rm -f "${tempfilex}"
