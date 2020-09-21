@@ -283,6 +283,7 @@ class PackageViewer:
     """
 
     DB_TABLE = "Packages"
+    CONFIG_TABLE = "HyHelp"
     YAML_FILE_VERSION = 1
 
     def __init__(
@@ -302,14 +303,22 @@ class PackageViewer:
         self.conn = sqlite3.connect(db_file)
         self.cursor = self.conn.cursor()
         self.cursor.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '%s'"
-            % PackageViewer.DB_TABLE
+            f"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = {PackageViewer.DB_TABLE}"
         )
         if int(self.cursor.fetchone()[0]) == 0:
             self.cursor.execute(
-                "CREATE TABLE %s (Name text, Type text, Description text)"
-                % PackageViewer.DB_TABLE
+                "CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Name text, Type text, Description text)"
+                % PackageViewer.DB_TABLE, 
             )
+        self.cursor.execute(
+            f"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = {PackageViewer.CONFIG_TABLE}"
+        )
+        if int(self.cursor.fetchone()[0]) == 0:
+            self.cursor.execute(
+                "CREATE TABLE %s (id INTEGER PRIMARY KEY NOT NULL, last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, version INTEGER)"
+                % PackageViewer.CONFIG_TABLE
+            )
+            self.cursor.execute(f"INSERT INTO {PackageViewer.CONFIG_TABLE} VALUES id=1")
             reload = True
         if reload:
             self.reload(config_file, feedback)
@@ -354,6 +363,8 @@ class PackageViewer:
                         f"INSERT INTO {PackageViewer.DB_TABLE} (Name, Type, Description) VALUES (?,?,?)",
                         records,
                     )
+        self.cursor.execute(f"UPDATE {PackageViewer.CONFIG_TABLE} SET last_update=?, version=? WHERE id=1",
+                            (1, int(pkg_data["version"])))
         self.conn.commit()
         if spinner:
             spinner.stop()
