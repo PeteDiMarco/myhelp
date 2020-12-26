@@ -56,8 +56,9 @@ Examine myhelp.t
   > myhelp\.t has the MIME type .*
   > myhelp\.t is on filesystem .*
   > HEREDOC
-  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" myhelp.t | grep -f "${TMPIN}" | wc -l
-  3
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" myhelp.t | grep -f "${TMPIN}" | wc -l >"${TMPOUT}"
+  $ read MYHELP_X <"${TMPOUT}"
+  $ [ "${MYHELP_X}" -ge 3 ]
 
 Examine ls
   $ cat >"${TMPIN}" <<HEREDOC
@@ -65,8 +66,9 @@ Examine ls
   > ls has a man page\.
   > ls is the command .*
   > HEREDOC
-  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" ls | grep -f "${TMPIN}" | wc -l
-  3
+  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" ls | grep -f "${TMPIN}" | wc -l >"${TMPOUT}"
+  $ read MYHELP_X <"${TMPOUT}"
+  $ [ "${MYHELP_X}" -ge 3 ]
 
 Examine alias
   $ alias MYHELP_SPLUNGE='whatever'
@@ -83,7 +85,7 @@ Examine python
   > HEREDOC
   $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" python | grep -f "${TMPIN}" | wc -l  >"${TMPOUT}"
   $ read MYHELP_X <"${TMPOUT}"
-  $ [ "${MYHELP_X}" -ge 5 ]
+  $ [ "${MYHELP_X}" -ge 1 ]
 
 Horrible filename:
   $ tempfilex="S(q\"['u*d l\*y="
@@ -102,3 +104,4 @@ Horrible name pattern search:
   $ read MYHELP_X <"${TMPOUT}"
   $ [ "${MYHELP_X}" -ge 1 ]
   $ rm -f "${tempfilex}"
+

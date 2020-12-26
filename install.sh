@@ -159,6 +159,10 @@ if [[ "${bin_dir}" = '?' ]]; then
     print_help
 fi
 
+if [[ -n "${force}" ]] && [[ "${test_mode}" = false ]]; then
+    rm -rf "${config_dir}"
+fi
+
 if [[ ! -d "${config_dir}" ]]; then
     mkdir -p "${config_dir}"
 fi

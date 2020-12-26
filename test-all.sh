@@ -1,5 +1,14 @@
 #!/bin/bash
 
+if which cram3 >/dev/null 2>&1 ; then
+    CRAM=$(which cram3)
+elif which cram >/dev/null 2>&1 ; then
+    CRAM=$(which cram)
+else
+    echo "Please install Python's cram module."
+    exit 1
+fi
+
 set -e
 
 # Clean up test directory
@@ -14,5 +23,5 @@ python3 -m pytest
 
 # Run system tests
 cd tests
-cram --shell=/bin/bash myhelp.t
+"${CRAM}" --shell=/bin/bash myhelp.t
 

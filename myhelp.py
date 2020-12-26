@@ -303,7 +303,8 @@ class PackageViewer:
         self.conn = sqlite3.connect(db_file)
         self.cursor = self.conn.cursor()
         self.cursor.execute(
-            f"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = {PackageViewer.DB_TABLE}"
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '%s'"
+            % PackageViewer.DB_TABLE
         )
         if int(self.cursor.fetchone()[0]) == 0:
             self.cursor.execute(
@@ -311,14 +312,15 @@ class PackageViewer:
                 % PackageViewer.DB_TABLE, 
             )
         self.cursor.execute(
-            f"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = {PackageViewer.CONFIG_TABLE}"
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '%s'"
+            % PackageViewer.CONFIG_TABLE
         )
         if int(self.cursor.fetchone()[0]) == 0:
             self.cursor.execute(
                 "CREATE TABLE %s (id INTEGER PRIMARY KEY NOT NULL, last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, version INTEGER)"
                 % PackageViewer.CONFIG_TABLE
             )
-            self.cursor.execute(f"INSERT INTO {PackageViewer.CONFIG_TABLE} VALUES id=1")
+            self.cursor.execute("INSERT INTO %s (id) VALUES (1)" % PackageViewer.CONFIG_TABLE)
             reload = True
         if reload:
             self.reload(config_file, feedback)
@@ -347,14 +349,13 @@ class PackageViewer:
         )  # Delete all rows from table.
         with open(config_filename, "r") as fp:
             pkg_data = yaml.load(fp, Loader=yaml.BaseLoader)
-            assert (
-                int(pkg_data["version"]) == PackageViewer.YAML_FILE_VERSION
-            )  # Ensure we recognize the version of the YAML file.
+            # Ensure we recognize the version of the YAML file.
+            assert int(pkg_data["version"]) == PackageViewer.YAML_FILE_VERSION
             for key, val in pkg_data["packages"].items():
-                if run_cmd(f"which {key}", [1]).strip():  # If the command is executable:
-                    pkg_list = run_cmd(
-                        val["command"]
-                    ).splitlines()  # Command should return 1 package name per line.
+                # If the command is executable:
+                if run_cmd(f"which {key}", [1]).strip():
+                    # Command should return 1 package name per line.
+                    pkg_list = run_cmd(val["command"]).splitlines()
                     # Build a list of values to be inserted into the database.
                     records = [(pkg, key, val["description"]) for pkg in pkg_list]
                     if spinner:
@@ -378,7 +379,7 @@ class PackageViewer:
         self.cursor.execute(
             f"SELECT * FROM {PackageViewer.DB_TABLE} WHERE Name=?", (target,)
         )
-        return [f"{target} is a {record[2]}." for record in self.cursor.fetchall()]
+        return [f"{target} is a {record[3]}." for record in self.cursor.fetchall()]
 
     def search(self, target: str):
         """
@@ -399,7 +400,7 @@ class PackageViewer:
             self.cursor.execute(
                 f"SELECT * FROM {PackageViewer.DB_TABLE} WHERE Name=?", (target,)
             )
-            return [f"{target} is a {record[2]}." for record in self.cursor.fetchall()]
+            return [f"{target} is a {record[3]}." for record in self.cursor.fetchall()]
 
     @staticmethod
     def glob_to_sql(pattern: str):
@@ -641,7 +642,7 @@ class CmdViewer:
     """
 
     CMD_OK = 0  # Command returned no error.
-    CMD_NOT_FOUND = 127 # Command not found by shell.
+    CMD_NOT_FOUND = 127  # Command not found by shell.
 
     def __init__(
         self,
@@ -668,7 +669,7 @@ class CmdViewer:
         self.glob_able = glob_able
         if ignore_rc == "*":
             self.ignore_rc = "*"
-        elif isinstance(ignore_rc, collections.Iterable):
+        elif isinstance(ignore_rc, collections.abc.Iterable):
             # "*" means ignore all return codes.
             if "*" in ignore_rc:
                 self.ignore_rc = "*"
