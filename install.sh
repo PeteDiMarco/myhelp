@@ -24,6 +24,7 @@
 # Defaults:
 DEBUG=false
 test_mode=false
+fix_path=false
 force=
 my_name=$(basename "$0")     # This script's name.
 src_dir=$(pwd)
@@ -31,6 +32,7 @@ config_dir="${HOME}"/.myhelp
 rc_filename=.myhelprc
 rc_file="${HOME}"/"${rc_filename}"
 cmd_alias='myhelp'
+MYHELP_PYTHON=
 
 if [[ -d "${HOME}/bin" ]]; then
     bin_dir="${HOME}/bin"
@@ -71,9 +73,30 @@ Optional Arguments:
   -c, --config          Configuration directory. Defaults to ${config_dir}.
   -t, --target          Directory to install files. ${msg}
   -a, --alias           User's alias for myhelp. Defaults to ${cmd_alias}.
+  -P, --PATH            Fix PATH to ignore virtual environment settings.
   -T, --TEST            Test mode.
 HelpInfoHERE
     exit 0
+}
+
+get_python3 () {
+    export MYHELP_PYTHON
+    MYHELP_PYTHON=$(which python)
+    if [[ $? -eq 0 ]] ; then
+        python_version=$(python -V | sed -e 's/^Python \([^.]*\)\..*$/\1/i')
+        if [[ "${python_version}" = '3' ]]; then
+            return
+        fi
+    fi
+    MYHELP_PYTHON=$(which python3)
+    if [[ $? -eq 0 ]] ; then
+        python_version=$(python -V | sed -e 's/^Python \([^.]*\)\..*$/\1/i')
+        if [[ "${python_version}" = '3' ]]; then
+            return
+        fi
+    fi
+    echo "ERROR: Can't find a Python interpreter."
+    exit 1
 }
 
 
@@ -89,8 +112,8 @@ if [[ $? -ne 4 ]]; then
 fi
 
 # Parse commandline options:
-OPTIONS='hDfs:c:t:a:T'
-LONGOPTIONS='help,DEBUG,force,src:,config:,target:,alias:,TEST'
+OPTIONS='hDfs:c:t:a:TP'
+LONGOPTIONS='help,DEBUG,force,src:,config:,target:,alias:,TEST,PATH'
 
 PARSED=$(getopt --options="${OPTIONS}" --longoptions="${LONGOPTIONS}" --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
@@ -141,6 +164,11 @@ while true; do
             test_mode=true
             ;;
 
+        -P|--PATH)
+            shift
+            fix_path=true
+            ;;
+
         -a|--alias)
             shift
             cmd_alias="$1"
@@ -158,6 +186,8 @@ if [[ "${bin_dir}" = '?' ]]; then
     echo
     print_help
 fi
+
+#get_python3
 
 if [[ -n "${force}" ]] && [[ "${test_mode}" = false ]]; then
     rm -rf "${config_dir}"
@@ -191,6 +221,7 @@ export MYHELP_PKG_YAML="${config_dir}"/packages.yaml
 export MYHELP_BIN_DIR="${bin_dir}"
 export MYHELP_REFRESH=0
 export MYHELP_ALIAS_NAME=${cmd_alias}
+export MYHELP_FIX_PATH=${fix_path}
 alias ${cmd_alias}='source myhelp.sh'
 RC_END
 
@@ -210,6 +241,7 @@ chmod u+x "${bin_dir}"/myhelp.sh
 cp -f myhelp.py "${bin_dir}"
 chmod u+x "${bin_dir}"/myhelp.py
 
+# shellcheck disable=SC1090
 source "${rc_file}"
 
 interactive=
@@ -218,12 +250,12 @@ if [[ "${test_mode}" = false ]]; then
 fi
 
 if type pipenv &>/dev/null; then
-    pipenv install &>/dev/null
+    pipenv install # &>/dev/null
 fi
 
 if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'
-    if python3 "${bin_dir}"/myhelp.py --refresh "${interactive}" --standalone; then
+    if "${MYHELP_PYTHON}" "${bin_dir}"/myhelp.py --refresh "${interactive}" --standalone; then
         echo 'Initialization complete.'
     else
         echo 'Initialization failed.'

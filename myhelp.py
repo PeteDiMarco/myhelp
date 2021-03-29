@@ -602,8 +602,8 @@ class BuiltInViewer:
             self.results[BuiltInViewer.Cmd.ALIAS.name].append(
                 (match.group(1), f"{match.group(1)} is {match.group(2)}.")
             )
-        else:
-            raise ValueError(line)
+            return
+        raise ValueError(line)
 
     def __getitem__(self, target: str):
         """
@@ -977,6 +977,13 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
         action="store_true",
         default=False,
         help="Refresh package cache.",
+    )
+    parser.add_argument(
+        "-P",
+        "--PATH",
+        action="store_true",
+        default=False,
+        help="Fix PATH to ignore virtual environments.",
     )
     parser.add_argument(
         "-p", "--pattern", action="append",
