@@ -37,7 +37,7 @@ import collections
 import itertools
 import shlex
 from enum import auto, IntEnum
-from typing import Pattern
+from typing import Pattern, Union, Iterable, Any
 import textwrap
 
 # Defaults:
@@ -86,7 +86,7 @@ class PatternDict(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def search(self, pattern, return_tuple: bool = False):
+    def search(self, pattern: re.Pattern, return_tuple: bool = False):
         """
         Search for every key that matches `pattern`. If `return_tuple` is True, return
         a list of (key, value) pairs. Otherwise return a list of values.
@@ -112,7 +112,7 @@ class PatternCounter(collections.Counter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def search(self, pattern, return_tuple: bool = False):
+    def search(self, pattern: re.Pattern, return_tuple: bool = False):
         """
         Search for every key that matches `pattern`. If `return_tuple` is True, return
         a list of (key, value) pairs. Otherwise return a list of values.
@@ -132,7 +132,7 @@ class PatternCounter(collections.Counter):
 
 def run_cmd(
     cmd_str: str,
-    ignore_rc=[0],
+    ignore_rc: Union[int, Iterable] = None,
     ignore_stderr: bool = True,
     exit_on_error: bool = False,
     env=None,
@@ -140,7 +140,8 @@ def run_cmd(
     """
     Runs a shell command. Can ignore one or more return codes.
     :param cmd_str: Shell command to run.
-    :param ignore_rc: Integer, string, or list of integers indicating return codes to ignore, or '*' to ignore all return codes.
+    :param ignore_rc: Integer or iterable of integers indicating return
+                      codes to ignore, or '*' to ignore all return codes.
     :param ignore_stderr: bool. Ignore any output to stderr.
     :param exit_on_error: bool. Exit program if error occurs, else raises exception.
     :param env: Dict of environment variables.
@@ -149,17 +150,17 @@ def run_cmd(
     :except ValueError
     """
     result = None
-    if ignore_rc == "*":  # Ignore all return codes.
-        ignore_rc = None
-    elif isinstance(ignore_rc, list):
-        if "*" in ignore_rc:  # Ignore all return codes.
-            ignore_rc = None
-        elif 0 not in ignore_rc:  # Always ignore return code 0.
-            ignore_rc.append(0)
+    ignore = {0}   # Always ignore return code 0.
+    if ignore_rc is None:
+        pass  # Already ignoring rc 0.
     elif isinstance(ignore_rc, int):
-        ignore_rc = [0, ignore_rc]  # Always ignore return code 0.
+        ignore.add(ignore_rc)
+    elif ignore_rc == "*" or "*" in ignore_rc:  # Ignore all return codes.
+        ignore = None
+    elif isinstance(ignore_rc, Iterable):
+        ignore.update(set(ignore_rc))
     else:
-        raise ValueError(ignore_rc)
+        raise ValueError(f"Bad value for ignore_rc ({ignore_rc}).")
 
     try:
         #print(f"run_cmd: {cmd_str}")
@@ -167,12 +168,12 @@ def run_cmd(
             cmd_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=env
         )
     except subprocess.CalledProcessError as e:
-        # "ignore_rc" contains return codes that are not considered errors.
+        # "ignore" contains return codes that are not considered errors.
         # For example: grep will return errno == 1 if it doesn't match any
         # lines in its input stream.  We want to ignore this case since it's
         # not really an error. Note: pipelines return the errno of the last command
         # by default. Use `set -o pipefail` to override this behavior.
-        if ignore_rc and e.returncode not in ignore_rc:
+        if ignore and e.returncode not in ignore:
             if exit_on_error:
                 exit(e.returncode)
             else:
@@ -180,13 +181,15 @@ def run_cmd(
                     returncode=e.returncode, cmd=cmd_str
                 )
     else:
-        if (ignore_rc and result.returncode not in ignore_rc) or (
+        if (ignore and result.returncode not in ignore) or (
             not ignore_stderr and result.stderr
         ):
             if exit_on_error:
                 # print(result.stderr)
                 exit(result.returncode if result.returncode != 0 else 1)
             else:
+                print(f"ignore_rc={ignore_rc}, ignore={ignore}, result.returncode={result.returncode}.")
+                print(f"ignore_stderr={ignore_stderr}, result.stderr={result.stderr}.")
                 raise subprocess.CalledProcessError(
                     returncode=result.returncode,
                     cmd=cmd_str,
@@ -223,7 +226,7 @@ class ProcessViewer(PatternCounter):
         count = super().__getitem__(item)
         return ProcessViewer.format(count, item)
 
-    def search(self, pattern, return_tuple: bool = False):
+    def search(self, pattern: re.Pattern, return_tuple: bool = False):
         """
         Search for every process name that matches `pattern`.
         :param pattern: regex or string glob.
@@ -262,7 +265,7 @@ class OpenFileViewer(PatternCounter):
         count = super().__getitem__(item)
         return OpenFileViewer.format(count, item)
 
-    def search(self, pattern, return_tuple: bool = False):
+    def search(self, pattern: re.Pattern, return_tuple: bool = False):
         """
         Search for every open file whose name matches `pattern`.
         :param pattern: regex or string glob.
@@ -283,7 +286,7 @@ class PackageViewer:
     """
 
     DB_TABLE = "Packages"
-    CONFIG_TABLE = "HyHelp"
+    CONFIG_TABLE = "MyHelp"
     YAML_FILE_VERSION = 1
 
     def __init__(
@@ -674,16 +677,13 @@ class CmdViewer:
             if "*" in ignore_rc:
                 self.ignore_rc = "*"
             else:
-                # Convert `ignore_rc` to a set, thus removing all duplicate elements.
-                # Then union that set with `CMD_OK` and `CMD_NOT_FOUND`. Finally, convert
-                # the set to a list.
-                self.ignore_rc = list(
-                    set(ignore_rc).union({CmdViewer.CMD_OK, CmdViewer.CMD_NOT_FOUND})
-                )
+                # Convert `ignore_rc` to a set, thus removing all duplicate
+                # elements. Then union that set with `CMD_OK` and `CMD_NOT_FOUND`.
+                self.ignore_rc = set(ignore_rc).union({CmdViewer.CMD_OK,
+                                                       CmdViewer.CMD_NOT_FOUND})
         elif isinstance(ignore_rc, int):
-            self.ignore_rc = list(
-                {ignore_rc, CmdViewer.CMD_OK, CmdViewer.CMD_NOT_FOUND}
-            )
+            self.ignore_rc = {ignore_rc, CmdViewer.CMD_OK,
+                              CmdViewer.CMD_NOT_FOUND}
         else:
             raise ValueError(f'Bad value for ignore_rc ({ignore_rc}).')
 

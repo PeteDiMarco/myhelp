@@ -187,8 +187,6 @@ if [[ "${bin_dir}" = '?' ]]; then
     print_help
 fi
 
-#get_python3
-
 if [[ -n "${force}" ]] && [[ "${test_mode}" = false ]]; then
     rm -rf "${config_dir}"
 fi
@@ -255,7 +253,7 @@ fi
 
 if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'
-    if "${MYHELP_PYTHON}" "${bin_dir}"/myhelp.py --refresh "${interactive}" --standalone; then
+    if "${bin_dir}"/myhelp.py --refresh "${interactive}" --standalone; then
         echo 'Initialization complete.'
     else
         echo 'Initialization failed.'
