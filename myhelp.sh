@@ -81,7 +81,7 @@ remove_venv_from_path () {
             echo "${dir} not found."
         fi
     done
-    export NEW_PATH=$(IFS=':' echo "${array[*]}")
+    export NEW_PATH=$(IFS=':' ; echo "${array[*]}")
 }
 
 
