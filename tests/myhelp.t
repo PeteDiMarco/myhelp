@@ -4,12 +4,14 @@ Check .myhelprc:
   $ cd "${TESTDIR}"
   $ cat tmp/.myhelprc
   export MYHELP_DIR=* (glob)
-  export MYHELP_PKG_DB=*packages.db (glob)
-  export MYHELP_PKG_YAML=*packages.yaml (glob)
-  export MYHELP_BIN_DIR=* (glob)
+  export MYHELP_PKG_DB="*packages.db" (glob)
+  export MYHELP_PKG_YAML="*packages.yaml" (glob)
+  export MYHELP_BIN_DIR="*" (glob)
   export MYHELP_REFRESH=[01] (re)
   export MYHELP_ALIAS_NAME=* (glob)
-  export MYHELP_FIX_PATH=* (glob)
+  export MYHELP_PYTHON=* (glob)
+  export MYHELP_PYTHONPATH=* (glob)
+  export MYHELP_VENV_BIN=* (glob)
   alias *='source myhelp.sh' (glob)
 
 Check other installation files:
@@ -22,8 +24,8 @@ Check other installation files:
   $ [ -f "${MYHELP_BIN_DIR}/myhelp.py" ]
 
 Check help:
-  $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" -h
-  usage: * [-h] [-D] [-r] [-P] [-p PATTERN] [-s] [-i] [NAME [NAME ...]] (glob)
+  $ . "${MYHELP_BIN_DIR}/myhelp.sh" -T "${MYHELP_BIN_DIR}" -h
+  usage: * [-h] [-D] [-r] [-P] [-p PATTERN] [-s] [-i] [NAME ...] (glob)
   
   Identifies the names provided.  Tries every test imaginable.  Looks for:
   man pages, info pages, executables in PATH, aliases, shell variables, running
@@ -33,7 +35,7 @@ Check help:
   positional arguments:
     NAME                  Object to identify.
   
-  optional arguments:
+  options:
     -h, --help            show this help message and exit
     -D, --DEBUG           Enable debugging mode.
     -r, --refresh         Refresh package cache.
@@ -51,8 +53,8 @@ Check help:
 
 Test specific searches:
 Examine myhelp.t
-  $ TMPIN=$(tempfile)
-  $ TMPOUT=$(tempfile)
+  $ TMPIN=$(mktemp)
+  $ TMPOUT=$(mktemp)
   $ cat >"${TMPIN}" <<HEREDOC
   > myhelp\.t is an ASCII text file\.
   > myhelp\.t has the MIME type .*

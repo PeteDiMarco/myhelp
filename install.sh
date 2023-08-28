@@ -24,16 +24,16 @@
 # Defaults:
 DEBUG=false
 test_mode=false
-fix_path=false
 force=
-my_name=$(basename "$0")     # This script's name.
-src_dir=$(pwd)
-config_dir="${HOME}"/.myhelp
-rc_filename=.myhelprc
-rc_file="${HOME}"/"${rc_filename}"
+my_name=$(basename "$0")  # This script's name.
+src_dir=$(dirname $(realpath "$0") )  # Source directory.
+config_dir="${HOME}/.myhelp"
+rc_file_name=.myhelprc
+rc_file_path="${HOME}/${rc_file_name}"
 cmd_alias='myhelp'
 MYHELP_PYTHON=
 
+# Find local bin directory.
 if [[ -d "${HOME}/bin" ]]; then
     bin_dir="${HOME}/bin"
 elif [[ -d "${HOME}/.local/bin" ]]; then
@@ -67,41 +67,62 @@ Installs the myhelp application in the user's local directory.
 
 Optional Arguments:
   -h, --help            Show this help message and exit.
-  -D, --DEBUG           Set debugging mode.
+  -a, --alias           User's alias for myhelp. Defaults to ${cmd_alias}.
+  -c, --config          Configuration directory. Defaults to ${config_dir}.
   -f, --force           Overwrite existing files.
   -s, --src             Directory containing source files. Defaults to ${src_dir}.
-  -c, --config          Configuration directory. Defaults to ${config_dir}.
   -t, --target          Directory to install files. ${msg}
-  -a, --alias           User's alias for myhelp. Defaults to ${cmd_alias}.
-  -P, --PATH            Fix PATH to ignore virtual environment settings.
-  -T, --TEST            Test mode.
+  -D, --DEBUG           Set debugging mode.
+  -T, --TEST            Test mode. Used by unit and integration tests.
 HelpInfoHERE
     exit 0
 }
 
-get_python3 () {
-    export MYHELP_PYTHON
-    MYHELP_PYTHON=$(which python)
-    if [[ $? -eq 0 ]] ; then
+check_for_python3 () {
+    # Check for "python".
+    if type python &>/dev/null; then
         python_version=$(python -V | sed -e 's/^Python \([^.]*\)\..*$/\1/i')
         if [[ "${python_version}" = '3' ]]; then
+            MYHELP_PYTHON='python'
             return
         fi
     fi
-    MYHELP_PYTHON=$(which python3)
-    if [[ $? -eq 0 ]] ; then
-        python_version=$(python -V | sed -e 's/^Python \([^.]*\)\..*$/\1/i')
-        if [[ "${python_version}" = '3' ]]; then
-            return
-        fi
+    # Check for "python3".
+    if type python3 &>/dev/null; then
+        MYHELP_PYTHON='python3'
+        return
     fi
-    echo "ERROR: Can't find a Python interpreter."
+    # Found neither.
+    echo "ERROR: Can't find a Python interpreter. Please install it and try again."
     exit 1
+}
+
+check_for_pip () {
+    # Check for "pip".
+    if type pip &>/dev/null; then
+        pip_name='pip'
+        return
+    fi
+    # Check for "pip3".
+    if type pip3 &>/dev/null; then
+        pip_name='pip3'
+        return
+    fi
+    # Found neither.
+    echo "ERROR: Can't find pip. Please install it and try again."
+    exit 1
+}
+
+get_pipenv () {
+    "${pip_name}" show pipenv &>/dev/null
+    if [[ $? -ne 0 ]]; then
+        "${pip_name}" install -U pipenv
+    fi
 }
 
 
 # *****************************************************************************
-# Main:
+# Process Command Line Options:
 # *****************************************************************************
 
 # Make sure we have the correct version of get_opt:
@@ -112,8 +133,8 @@ if [[ $? -ne 4 ]]; then
 fi
 
 # Parse commandline options:
-OPTIONS='hDfs:c:t:a:TP'
-LONGOPTIONS='help,DEBUG,force,src:,config:,target:,alias:,TEST,PATH'
+OPTIONS='hDfs:c:t:a:T'
+LONGOPTIONS='help,DEBUG,force,src:,config:,target:,alias:,TEST'
 
 PARSED=$(getopt --options="${OPTIONS}" --longoptions="${LONGOPTIONS}" --name "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
@@ -164,11 +185,6 @@ while true; do
             test_mode=true
             ;;
 
-        -P|--PATH)
-            shift
-            fix_path=true
-            ;;
-
         -a|--alias)
             shift
             cmd_alias="$1"
@@ -181,30 +197,40 @@ while true; do
     esac
 done
 
+# bin_dir is required.
 if [[ "${bin_dir}" = '?' ]]; then
     echo 'Please specify a target directory.'
     echo
     print_help
 fi
 
+# If force is true and we're not running tests, overwrite existing config files.
 if [[ -n "${force}" ]] && [[ "${test_mode}" = false ]]; then
     rm -rf "${config_dir}"
 fi
 
-if [[ ! -d "${config_dir}" ]]; then
-    mkdir -p "${config_dir}"
-fi
-
+# Make paths absolute.
 bin_dir=$(realpath "${bin_dir}")
 config_dir=$(realpath "${config_dir}")
 src_dir=$(realpath "${src_dir}")
 
-if [[ "${test_mode}" = true ]]; then
-    rc_file="${bin_dir}"/"${rc_filename}"
-fi
 
-if [[ -f "${rc_file}" ]] && [[ -z "${force}" ]] && [[ "${test_mode}" = false ]]; then
-    read -p "\"${rc_file}\" file already exists. Overwrite it?" reply
+# *****************************************************************************
+# Main:
+# *****************************************************************************
+
+# Create the config directory (if it doesn't exist already).
+if [[ ! -d "${config_dir}" ]]; then
+    mkdir -p "${config_dir}"
+fi
+# If we're running tests, create a local copy of the rc file.
+if [[ "${test_mode}" = true ]]; then
+    rc_file_path="${bin_dir}/${rc_file_name}"
+fi
+# Ask the user if they want to overwrite the rc file.
+if [[ -f "${rc_file_path}" ]] && [[ -z "${force}" ]] \
+        && [[ "${test_mode}" = false ]]; then
+    read -p "\"${rc_file_path}\" file already exists. Overwrite it?" reply
     if [[ ! "${reply}" =~ ^\ *[yY] ]]; then
         echo "Installation aborted."
         exit 0
@@ -212,14 +238,30 @@ if [[ -f "${rc_file}" ]] && [[ -z "${force}" ]] && [[ "${test_mode}" = false ]];
     echo
 fi
 
-cat >"${rc_file}" <<RC_END
+check_for_python3
+check_for_pip
+get_pipenv
+pipenv install &>/dev/null
+
+venv_dir=$(pipenv --venv)
+venv_bin_dir="${venv_dir}/bin"
+activate="${venv_bin_dir}/activate"
+if [[ -f "${activate}" ]]; then
+    # shellcheck disable=SC1090
+    source "${activate}"
+    PYTHONPATH="${src_dir}"
+fi
+
+cat >"${rc_file_path}" <<RC_END
 export MYHELP_DIR="${config_dir}"
-export MYHELP_PKG_DB="${config_dir}"/packages.db
-export MYHELP_PKG_YAML="${config_dir}"/packages.yaml
+export MYHELP_PKG_DB="${config_dir}/packages.db"
+export MYHELP_PKG_YAML="${config_dir}/packages.yaml"
 export MYHELP_BIN_DIR="${bin_dir}"
 export MYHELP_REFRESH=0
-export MYHELP_ALIAS_NAME=${cmd_alias}
-export MYHELP_FIX_PATH=${fix_path}
+export MYHELP_ALIAS_NAME="${cmd_alias}"
+export MYHELP_PYTHON="${MYHELP_PYTHON}"
+export MYHELP_PYTHONPATH="${PYTHONPATH}"
+export MYHELP_VENV_BIN="${venv_bin_dir}"
 alias ${cmd_alias}='source myhelp.sh'
 RC_END
 
@@ -233,27 +275,23 @@ BASHRC_CODE
 fi
 
 cd "${src_dir}"
-cp -f packages.yaml.DEFAULT "${config_dir}"/packages.yaml
+cp -f packages.yaml.DEFAULT "${config_dir}/packages.yaml"
 cp -f myhelp.sh "${bin_dir}"
-chmod u+x "${bin_dir}"/myhelp.sh
+chmod u+x "${bin_dir}/myhelp.sh"
 cp -f myhelp.py "${bin_dir}"
-chmod u+x "${bin_dir}"/myhelp.py
+chmod u+x "${bin_dir}/myhelp.py"
 
 # shellcheck disable=SC1090
-source "${rc_file}"
+source "${rc_file_path}"
 
 interactive=
 if [[ "${test_mode}" = false ]]; then
     interactive='--interactive'
 fi
 
-if type pipenv &>/dev/null; then
-    pipenv install # &>/dev/null
-fi
-
 if [[ ! -f "${config_dir}/packages.db" ]] || [[ -n "${force}" ]]; then
     echo 'Initializing package name database. Please wait.'
-    if "${bin_dir}"/myhelp.py --refresh "${interactive}" --standalone; then
+    if "${bin_dir}/myhelp.py" --refresh "${interactive}" --standalone; then
         echo 'Initialization complete.'
     else
         echo 'Initialization failed.'
