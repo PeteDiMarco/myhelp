@@ -6,7 +6,7 @@ devices, filesystems, running processes, and built-in shell commands.
 
 ### Prerequisites
 
-* Python 3.6 or above
+* Python 3.8 or above
 * Bash
 * which
 
@@ -61,7 +61,11 @@ parse the names of the various packages installed on the computer.
     export MYHELP_BIN_DIR="${HOME}/bin"
     export MYHELP_REFRESH=0       # 0=Only reload with '-r', 1=Reload package database on every call.
     export MYHELP_ALIAS_NAME=myhelp
+    export MYHELP_PYTHON="python"
+    export MYHELP_PYTHONPATH="<SOURCE_DIRECTORY>"
+    export MYHELP_VENV_BIN="<SOURCE_DIRECTORY>/.venv/bin"
     alias myhelp='source myhelp.sh'
+
 
 #### packages.yaml
 
@@ -102,14 +106,14 @@ Run `./uninstall.sh`. Use `uninstall.sh -f` to delete the directory `~/.myhelp`.
 ## Description
 
 MyHelp is composed of 2 scripts. The first script is called `myhelp.sh`. `myhelp.sh`
-must be `source`d from the shell in order for MyHelp to read the current shell's
+must be run with `source` from the shell in order for MyHelp to read the current shell's
 aliases and settings. `myhelp.sh` then calls `myhelp.py`.
 
 ### Help
 
     usage: myhelp [-h] [-D] [-r] [-p PATTERN] [-s] [-i] [NAME [NAME ...]]
     
-    Identifies the names provided.  Tries every test imaginable.  Looks for:
+    Identifies the names provided. Tries every test imaginable. Looks for:
     man pages, info pages, executables in PATH, aliases, shell variables, running
     processes, shell functions, built-in shell commands, packages, filesystems,
     and files relative to the current working directory.
@@ -134,7 +138,7 @@ aliases and settings. `myhelp.sh` then calls `myhelp.py`.
 
 ## Versioning
 
-0.2
+0.3
 
 ## Authors
 

@@ -16,7 +16,7 @@
 #***************************************************************************
 #
 # Name: myhelp.sh
-# Version: 0.2
+# Version: 0.3
 # Date: 2020-06-09
 # Written by: Pete DiMarco <pete.dimarco.software@gmail.com>
 #

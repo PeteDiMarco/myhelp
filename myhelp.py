@@ -16,7 +16,7 @@
 # ***************************************************************************
 #
 # Name:         myhelp.py
-# Version:      0.2
+# Version:      0.3
 # Date:         06/23/2020
 # Written by:   Pete DiMarco <pete.dimarco.software@gmail.com>
 #
