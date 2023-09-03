@@ -4,6 +4,10 @@ packages:
     description: 'KDE applet'
     command: "kpackagetool5 --list --type Plasma/Applet -g | grep -v '^Listing service types:' | sed -e 's/^org\\.kde\\.plasma\\.//'"
 
+  dconf:
+    description: 'Gnome dconf item'
+    command: "dconf dump '/' | grep '^\\[' | sed -e 's/\\[\\(.*\\)\\]/\\1/' | tr '/' '\\n' | sort | uniq"
+
   dpkg:
     description: 'Debian package'
     command: "dpkg -l | grep '^ii'| sed -e 's/   */\\t/g' | cut -f 2 | sed -e 's/:.*$//'"
@@ -22,15 +26,15 @@ packages:
 
   pip:
     description: 'Python package'
-    command: "pip list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+    command: "if type -t deactivate &>/dev/null; then deactivate ; fi ; pip list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
 
   pip2:
     description: 'Python2 package'
-    command: "pip2 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+    command: "if type -t deactivate &>/dev/null; then deactivate ; fi ; pip2 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
 
   pip3:
     description: 'Python3 package'
-    command: "pip3 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
+    command: "if type -t deactivate &>/dev/null; then deactivate ; fi ; pip3 list 2>/dev/null | tail +3 | sed -e 's/  .*$//'"
 
   conda:
     description: 'Python conda package'

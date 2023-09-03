@@ -120,6 +120,13 @@ get_pipenv () {
     fi
 }
 
+check_dir_exists () {
+    if [[ ! -d "${1}" ]]; then
+        echo "Directory ${1} does not exist. Exiting..."
+        exit 1
+    fi
+}
+
 
 # *****************************************************************************
 # Process Command Line Options:
@@ -223,6 +230,10 @@ src_dir=$(realpath "${src_dir}")
 if [[ ! -d "${config_dir}" ]]; then
     mkdir -p "${config_dir}"
 fi
+
+check_dir_exists "${bin_dir}"
+check_dir_exists "${src_dir}"
+
 # If we're running tests, create a local copy of the rc file.
 if [[ "${test_mode}" = true ]]; then
     rc_file_path="${bin_dir}/${rc_file_name}"
@@ -238,12 +249,16 @@ if [[ -f "${rc_file_path}" ]] && [[ -z "${force}" ]] \
     echo
 fi
 
+export PIPENV_VENV_IN_PROJECT=1
 check_for_python3
 check_for_pip
 get_pipenv
-pipenv install &>/dev/null
 
-venv_dir=$(pipenv --venv)
+venv_dir="${src_dir}/.venv"
+if  [[ ! -d "${venv_dir}" ]]; then
+    mkdir -p "${venv_dir}"
+fi
+pipenv install # &>/dev/null
 venv_bin_dir="${venv_dir}/bin"
 activate="${venv_bin_dir}/activate"
 if [[ -f "${activate}" ]]; then
