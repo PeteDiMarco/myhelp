@@ -979,13 +979,6 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
         help="Refresh package cache.",
     )
     parser.add_argument(
-        "-P",
-        "--PATH",
-        action="store_true",
-        default=False,
-        help="Fix PATH to ignore virtual environments.",
-    )
-    parser.add_argument(
         "-p", "--pattern", action="append",
         help="Search for glob pattern. The pattern should be wrapped in quotes."
     )

@@ -25,7 +25,7 @@ Check other installation files:
 
 Check help:
   $ . "${MYHELP_BIN_DIR}/myhelp.sh" -T "${MYHELP_BIN_DIR}" -h
-  usage: * [-h] [-D] [-r] [-P] [-p PATTERN] [-s] [-i] [NAME ...] (glob)
+  usage: * [-h] [-D] [-r] [-p PATTERN] [-s] [-i] [NAME ...] (glob)
   
   Identifies the names provided.  Tries every test imaginable.  Looks for:
   man pages, info pages, executables in PATH, aliases, shell variables, running
@@ -39,7 +39,6 @@ Check help:
     -h, --help            show this help message and exit
     -D, --DEBUG           Enable debugging mode.
     -r, --refresh         Refresh package cache.
-    -P, --PATH            Fix PATH to ignore virtual environments.
     -p PATTERN, --pattern PATTERN
                           Search for glob pattern. The pattern should be wrapped
                           in quotes.
