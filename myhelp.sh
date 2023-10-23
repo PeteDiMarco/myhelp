@@ -194,21 +194,20 @@ fi
     fi
 } >> "${temp_file}"
 
-if [[ -n "${MYHELP_VENV_BIN}" ]]; then
-    source "${MYHELP_VENV_BIN}/activate"
-fi
-
 # Can't pipe subshell directly to myhelp.py because `terms` and `flags` would
 # become local to the subshell.
-if [[ "${DEBUG}" = true ]]; then
-    echo "PYTHONPATH=${MYHELP_PYTHONPATH}" "${MYHELP_PYTHON}" \
-        "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" "< ${temp_file}"
-fi
-PYTHONPATH="${MYHELP_PYTHONPATH}" "${MYHELP_PYTHON}" \
-    "${bin_directory}/myhelp.py" "${flags[@]}" "${terms[@]}" < "${temp_file}"
+
+bash -s <<EOF
+    if [[ -f "${MYHELP_VENV_BIN}/activate" ]]; then
+        source "${MYHELP_VENV_BIN}/activate"
+    fi
+
+    PYTHONPATH="${MYHELP_PYTHONPATH}" "${MYHELP_PYTHON}" \
+        "${bin_directory}/myhelp.py" ${flags[@]} ${terms[@]} < "${temp_file}"
+
+    if type deactivate &>/dev/null; then
+        deactivate
+    fi
+EOF
+
 rm -f "${temp_file}"
-
-if type deactivate &>/dev/null; then
-    deactivate
-fi
-

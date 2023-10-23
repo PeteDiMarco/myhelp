@@ -92,12 +92,12 @@ Examine python
   $ [ "${MYHELP_X}" -ge 1 ]
 
 Horrible filename:
-  $ tempfilex="S(q\"['u*d l\*y="
+  $ tempfilex="S(q\"[u*d l\*y="
   $ echo "splunge" > "${tempfilex}"
   $ cat >"${TMPIN}" <<HEREDOC
-  > WARNING: Treating "*" in "S(q"['u*d l\*y=" as a literal character, not a glob.
-  > S(q"['u*d l\*y= is an ASCII text file.
-  > S(q"['u*d l\*y= has the MIME type text/plain.
+  > WARNING: Treating "*" in "S(q"[u*d l\*y=" as a literal character, not a glob.
+  > S(q"[u*d l\*y= is an ASCII text file.
+  > S(q"[u*d l\*y= has the MIME type text/plain.
   > HEREDOC
   $ . "${MYHELP_BIN_DIR}"/myhelp.sh -T "${MYHELP_BIN_DIR}" "${tempfilex}" | grep -Ff "${TMPIN}" | wc -l  >"${TMPOUT}"
   $ read MYHELP_X <"${TMPOUT}"

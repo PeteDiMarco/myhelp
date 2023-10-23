@@ -397,7 +397,7 @@ class PackageViewer:
                 f"SELECT * FROM {PackageViewer.DB_TABLE} WHERE Name LIKE ?", (target,)
             )
             return [
-                f"{record[0]} is a {record[2]}." for record in self.cursor.fetchall()
+                f"{record[1]} is a {record[3]}." for record in self.cursor.fetchall()
             ]
         else:
             self.cursor.execute(
