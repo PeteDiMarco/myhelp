@@ -115,9 +115,27 @@ check_for_pip () {
 
 get_pipenv () {
     "${pip_name}" show pipenv &>/dev/null
-    if [[ $? -ne 0 ]]; then
-        "${pip_name}" install -U pipenv
+    if [[ $? -eq 0 ]]; then
+        return
     fi
+
+    "${pip_name}" install -U pipenv &>/dev/null
+    if [[ $? -eq 0 ]]; then
+        return
+    fi
+
+    error_file="/tmp/${my_name}.error-msg"
+    "${pip_name}" install --user -U pipenv &>"${error_file}"
+    if [[ $? -eq 0 ]]; then
+        return
+    fi
+
+    echo 'The following error occurred while installing "pipenv".'
+    echo 'Please install it manually.'
+    echo
+    cat < "${error_file}"
+    rm -f "${error_file}"
+    exit 0
 }
 
 check_dir_exists () {
