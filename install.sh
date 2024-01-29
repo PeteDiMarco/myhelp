@@ -116,25 +116,29 @@ check_for_pip () {
 get_pipenv () {
     "${pip_name}" show pipenv &>/dev/null
     if [[ $? -eq 0 ]]; then
+        # If pipenv is already installed then return.
         return
     fi
 
     "${pip_name}" install -U pipenv &>/dev/null
     if [[ $? -eq 0 ]]; then
+        # We successfully installed pipenv globally.
         return
     fi
 
     error_file="/tmp/${my_name}.error-msg"
     "${pip_name}" install --user -U pipenv &>"${error_file}"
     if [[ $? -eq 0 ]]; then
+        # We successfully installed pipenv locally.
         return
     fi
 
-    echo 'The following error occurred while installing "pipenv".'
-    echo 'Please install it manually.'
-    echo
+    echo 'The following error occurred while installing "pipenv":'
     cat < "${error_file}"
     rm -f "${error_file}"
+    echo
+    echo 'Please install pipenv manually with this command: '
+    echo "    ${pip_name} install --user -U pipenv"
     exit 0
 }
 
@@ -276,13 +280,21 @@ venv_dir="${src_dir}/venv"
 if  [[ ! -d "${venv_dir}" ]]; then
     mkdir -p "${venv_dir}"
 fi
-pipenv install # &>/dev/null
+pipenv install &>/dev/null
 venv_bin_dir="${venv_dir}/bin"
 activate="${venv_bin_dir}/activate"
+
+if [[ ! "${PYTHONPATH}" =~ ${venv_dir} ]]; then
+    if [[ -z "${PYTHONPATH}" ]]; then
+        PYTHONPATH="${src_dir}"
+    else
+        PYTHONPATH="${src_dir}:${PYTHONPATH}"
+    fi
+fi
+
 if [[ -f "${activate}" ]]; then
     # shellcheck disable=SC1090
     source "${activate}"
-    PYTHONPATH="${src_dir}"
 fi
 
 cat >"${rc_file_path}" <<RC_END
