@@ -276,7 +276,7 @@ check_for_python3
 check_for_pip
 get_pipenv
 
-venv_dir="${src_dir}/venv"
+venv_dir="${src_dir}/.venv"
 if  [[ ! -d "${venv_dir}" ]]; then
     mkdir -p "${venv_dir}"
 fi
