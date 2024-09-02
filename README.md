@@ -138,7 +138,7 @@ aliases and settings. `myhelp.sh` then calls `myhelp.py`.
 
 ## Versioning
 
-0.3
+0.5
 
 ## Authors
 

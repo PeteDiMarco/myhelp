@@ -3,7 +3,8 @@ Cram test file for MyHelp.
 Check .myhelprc:
   $ cd "${TESTDIR}"
   $ cat tmp/.myhelprc
-  export MYHELP_DIR=* (glob)
+  export MYHELP_RC_FILE="*myhelprc" (glob)
+  export MYHELP_CFG_DIR=* (glob)
   export MYHELP_PKG_DB="*packages.db" (glob)
   export MYHELP_PKG_YAML="*packages.yaml" (glob)
   export MYHELP_BIN_DIR="*" (glob)
@@ -16,7 +17,7 @@ Check .myhelprc:
 
 Check other installation files:
   $ source tmp/.myhelprc
-  $ [ -d "${MYHELP_DIR}" ]
+  $ [ -d "${MYHELP_CFG_DIR}" ]
   $ [ -f "${MYHELP_PKG_DB}" ]
   $ [ -f "${MYHELP_PKG_YAML}" ]
   $ [ -d "${MYHELP_BIN_DIR}" ]

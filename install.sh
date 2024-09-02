@@ -15,7 +15,7 @@
 # *****************************************************************************
 #
 # Name:         install.sh
-# Version:      0.3
+# Version:      0.5
 # Written by:   Pete DiMarco <pete.dimarco.software@gmail.com>
 # Date:         06/23/2020
 #
@@ -27,9 +27,18 @@ test_mode=false
 force=
 my_name=$(basename "$0")  # This script's name.
 src_dir=$(dirname $(realpath "$0") )  # Source directory.
-config_dir="${HOME}/.myhelp"
-rc_file_name=.myhelprc
-rc_file_path="${HOME}/${rc_file_name}"
+
+# Many Linux distros keep configuration files in ~/.config.
+if [[ -d "${HOME}/.config" ]]; then
+    config_dir="${HOME}/.config/myhelp"
+    rc_file_name=myhelprc
+    rc_file_path="${HOME}/.config/${rc_file_name}"
+else
+    # Store the config data in the home directory.
+    config_dir="${HOME}/.myhelp"
+    rc_file_name=.myhelprc
+    rc_file_path="${HOME}/${rc_file_name}"
+fi
 cmd_alias='myhelp'
 MYHELP_PYTHON=
 
@@ -48,16 +57,18 @@ fi
 # *****************************************************************************
 
 debug_msg () {
+    # Prints $1 if DEBUG is true.
     if [[ "${DEBUG}" = true ]]; then
         echo 'DEBUG: '"$1"
     fi
 }
 
 print_help () {
+    # Print help message, then exit.
     if [[ "${bin_dir}" = '?' ]]; then
         msg='REQUIRED!'
     else
-        msg="Defaults to ${bin_dir}."
+        msg="Defaults to: ${bin_dir}"
     fi
     cat <<HelpInfoHERE
 Usage: ${my_name} [-h] [-D] [-f] [-s SOURCE_DIR] [-c CONFIGURATION_DIR]
@@ -66,14 +77,17 @@ Usage: ${my_name} [-h] [-D] [-f] [-s SOURCE_DIR] [-c CONFIGURATION_DIR]
 Installs the myhelp application in the user's local directory.
 
 Optional Arguments:
-  -h, --help            Show this help message and exit.
-  -a, --alias           User's alias for myhelp. Defaults to ${cmd_alias}.
-  -c, --config          Configuration directory. Defaults to ${config_dir}.
-  -f, --force           Overwrite existing files.
-  -s, --src             Directory containing source files. Defaults to ${src_dir}.
-  -t, --target          Directory to install files. ${msg}
-  -D, --DEBUG           Set debugging mode.
-  -T, --TEST            Test mode. Used by unit and integration tests.
+  -h, --help               Show this help message and exit.
+  -a, --alias ALIAS        User's alias for myhelp. Defaults to:
+                           ${cmd_alias}
+  -c, --config CONFIGDIR   Configuration directory. Defaults to:
+                           ${config_dir}
+  -f, --force              Overwrite existing files.
+  -s, --src SOURCEDIR      Directory containing source files. Defaults to:
+                           ${src_dir}
+  -t, --target TARGETDIR   Directory to install files. ${msg}
+  -D, --DEBUG              Set debugging mode.
+  -T, --TEST               Test mode. Used by unit and integration tests.
 HelpInfoHERE
     exit 0
 }
@@ -114,12 +128,14 @@ check_for_pip () {
 }
 
 get_pipenv () {
+    # Install pipenv if needed.
     "${pip_name}" show pipenv &>/dev/null
     if [[ $? -eq 0 ]]; then
         # If pipenv is already installed then return.
         return
     fi
 
+    # Global install.
     "${pip_name}" install -U pipenv &>/dev/null
     if [[ $? -eq 0 ]]; then
         # We successfully installed pipenv globally.
@@ -127,6 +143,7 @@ get_pipenv () {
     fi
 
     error_file="/tmp/${my_name}.error-msg"
+    # User install.
     "${pip_name}" install --user -U pipenv &>"${error_file}"
     if [[ $? -eq 0 ]]; then
         # We successfully installed pipenv locally.
@@ -258,6 +275,7 @@ check_dir_exists "${src_dir}"
 
 # If we're running tests, create a local copy of the rc file.
 if [[ "${test_mode}" = true ]]; then
+    rc_file_name=.myhelprc
     rc_file_path="${bin_dir}/${rc_file_name}"
 fi
 # Ask the user if they want to overwrite the rc file.
@@ -298,7 +316,8 @@ if [[ -f "${activate}" ]]; then
 fi
 
 cat >"${rc_file_path}" <<RC_END
-export MYHELP_DIR="${config_dir}"
+export MYHELP_RC_FILE="${rc_file_path}"
+export MYHELP_CFG_DIR="${config_dir}"
 export MYHELP_PKG_DB="${config_dir}/packages.db"
 export MYHELP_PKG_YAML="${config_dir}/packages.yaml"
 export MYHELP_BIN_DIR="${bin_dir}"
@@ -311,12 +330,14 @@ alias ${cmd_alias}='source myhelp.sh'
 RC_END
 
 if [[ "${test_mode}" = false ]]; then
-    echo 'Be sure to add the following to your ".bashrc" file if it is not already present:'
+    echo 'Be sure to add the following to your ".bashrc" file if it is not already'
+    echo 'present:'
     cat <<BASHRC_CODE
-if [ -f ~/.myhelprc ]; then
-    source ~/.myhelprc
+if [ -f "${rc_file_path}" ]; then
+    source "${rc_file_path}"
 fi
 BASHRC_CODE
+    echo
 fi
 
 cd "${src_dir}"

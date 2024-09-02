@@ -16,7 +16,7 @@
 #***************************************************************************
 #
 # Name: myhelp.sh
-# Version: 0.3
+# Version: 0.5
 # Date: 2020-06-09
 # Written by: Pete DiMarco <pete.dimarco.software@gmail.com>
 #
@@ -39,9 +39,16 @@
 # Defaults:
 DEBUG=false
 bin_directory=
-#my_shell=$(basename "$BASH")          # This script's shell.
-#preferred_shell=$(basename "$SHELL")  # User's shell from passwd.
-rc_file=${HOME}/.myhelprc
+# Check if MYHELP_RC_FILE was defined in the parent shell.
+rc_file="${MYHELP_RC_FILE}"
+if [[ -z "${MYHELP_RC_FILE}" ]]; then
+    if [[ -f "${HOME}/.config/myhelprc" ]]; then
+        rc_file="${HOME}/.config/myhelprc"
+    elif [[ -f "${HOME}/.myhelprc" ]]; then
+        rc_file="${HOME}/.myhelprc"
+    fi
+fi
+
 NEW_PATH="${PATH}"
 
 # Flags passed to myhelp.py.
@@ -157,7 +164,7 @@ if [[ -f "${rc_file}" ]]; then
     # shellcheck disable=SC1090
     source "${rc_file}"
 else
-    echo "ERROR: Can't find ${rc_file}!"
+    echo "ERROR: Can't find myhelp\'s rc file: ${rc_file}"
     return 1 2>/dev/null | exit 1
 fi
 
@@ -166,7 +173,7 @@ if [[ -z "${bin_directory}" ]]; then
     bin_directory="${MYHELP_BIN_DIR}"
 fi
 
-
+# Collect output from commands.
 {
     # Check aliases in the current shell.
     echo "###alias###"

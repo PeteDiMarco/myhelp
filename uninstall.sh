@@ -15,7 +15,7 @@
 # *****************************************************************************
 #
 # Name:         uninstall.sh
-# Version:      0.1
+# Version:      0.5
 # Written by:   Pete DiMarco <pete.dimarco.software@gmail.com>
 # Date:         06/23/2020
 #
@@ -25,11 +25,15 @@
 DEBUG=false
 force='-n'
 my_name=$(basename "$0")     # This script's name.
-rc_file="${HOME}"/.myhelprc
-source "${rc_file}"
-if [[ $? -ne 0 ]]; then
-    echo "ERROR: Could not find ${rc_file}."
-    exit 2
+# Check if MYHELP_RC_FILE was defined in the parent shell.
+rc_file="${MYHELP_RC_FILE}"
+if [[ -z "${MYHELP_RC_FILE}" ]]; then
+    # MYHELP_RC_FILE was not defined in the parent shell.
+    if [[ -f "${HOME}/.config/myhelprc" ]]; then
+        rc_file="${HOME}/.config/myhelprc"
+    elif [[ -f "${HOME}/.myhelprc" ]]; then
+        rc_file="${HOME}/.config/myhelprc"
+    fi
 fi
 
 
@@ -38,26 +42,30 @@ fi
 # *****************************************************************************
 
 debug_msg () {
+    # Prints $1 if DEBUG is true.
     if [[ "${DEBUG}" = true ]]; then
         echo 'DEBUG: '"$1"
     fi
 }
 
 print_help () {
+    # Print help message, then exit.
     cat <<HelpInfoHERE
 Usage: ${my_name} [-h] [-D] [-f]
 
 Un-installs the myhelp application.
 
 Optional Arguments:
-  -h, --help            Show this help message and exit.
-  -D, --DEBUG           Set debugging mode.
-  -f, --force           Delete all contents of ${MYHELP_DIR}.
+  -h, --help                    Show this help message and exit.
+  -D, --DEBUG                   Set debugging mode.
+  -f, --force                   Delete myhelp's config directory.
+  -c, --configfile CONFIGFILE   Path to myhelp's "rc" file.
 HelpInfoHERE
     exit 0
 }
 
 quiet_rm () {
+    # Don't delete nonexistent file.
     if [[ -f "$1" ]]; then
         rm -f "$1"
     fi
@@ -105,6 +113,12 @@ while true; do
             shift
             ;;
 
+        -c|--configfile)
+            shift
+            rc_file="$1"
+            shift
+            ;;
+
         *)
             break
             ;;
@@ -113,14 +127,23 @@ done
 
 set -e
 
+if [[ -n "${rc_file}" ]]; then
+    source "${rc_file}"
+fi
+
+if [[ -z "${MYHELP_CFG_DIR}" ]]; then
+    echo "ERROR: Can\'t find myhelp\'s configuration directory."
+    exit 2
+fi
+
 if [[ "${force}" = '-f' ]]; then
-    if [[ -d "${MYHELP_DIR}" ]]; then
-        rm -rf "${MYHELP_DIR}"
+    if [[ -d "${MYHELP_CFG_DIR}" ]]; then
+        rm -rf "${MYHELP_CFG_DIR}"
     fi
 else
-    quiet_rm "${MYHELP_DIR}"/packages.yaml
-    quiet_rm "${MYHELP_DIR}"/packages.db
-    rmdir --ignore-fail-on-non-empty "${MYHELP_DIR}"
+    quiet_rm "${MYHELP_CFG_DIR}"/packages.yaml
+    quiet_rm "${MYHELP_CFG_DIR}"/packages.db
+    rmdir --ignore-fail-on-non-empty "${MYHELP_CFG_DIR}"
 fi
 
 quiet_rm "${rc_file}"

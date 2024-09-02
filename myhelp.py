@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # ***************************************************************************
 # Copyright 2020 Pete DiMarco
 #
@@ -16,7 +16,7 @@
 # ***************************************************************************
 #
 # Name:         myhelp.py
-# Version:      0.3
+# Version:      0.5
 # Date:         06/23/2020
 # Written by:   Pete DiMarco <pete.dimarco.software@gmail.com>
 #
@@ -306,24 +306,28 @@ class PackageViewer:
         self.conn = sqlite3.connect(db_file)
         self.cursor = self.conn.cursor()
         self.cursor.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '%s'"
-            % PackageViewer.DB_TABLE
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND "
+            f"name = '{PackageViewer.DB_TABLE}'"
         )
         if int(self.cursor.fetchone()[0]) == 0:
             self.cursor.execute(
-                "CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Name text, Type text, Description text)"
-                % PackageViewer.DB_TABLE, 
+                f"CREATE TABLE {PackageViewer.DB_TABLE} (id INTEGER PRIMARY "
+                "KEY AUTOINCREMENT NOT NULL, Name text, Type text, "
+                "Description text)"
             )
         self.cursor.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '%s'"
-            % PackageViewer.CONFIG_TABLE
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND "
+            f"name = '{PackageViewer.CONFIG_TABLE}'"
         )
         if int(self.cursor.fetchone()[0]) == 0:
             self.cursor.execute(
-                "CREATE TABLE %s (id INTEGER PRIMARY KEY NOT NULL, last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, version INTEGER)"
-                % PackageViewer.CONFIG_TABLE
+                f"CREATE TABLE {PackageViewer.CONFIG_TABLE} (id INTEGER "
+                "PRIMARY KEY NOT NULL, last_update TIMESTAMP DEFAULT "
+                "CURRENT_TIMESTAMP NOT NULL, version INTEGER)"
             )
-            self.cursor.execute("INSERT INTO %s (id) VALUES (1)" % PackageViewer.CONFIG_TABLE)
+            self.cursor.execute(
+                f"INSERT INTO {PackageViewer.CONFIG_TABLE} (id) VALUES (1)"
+            )
             reload = True
         if reload:
             self.reload(config_file, feedback)
@@ -1002,7 +1006,7 @@ following commands:\n""" + textwrap.indent(textwrap.fill(", ".join(no_patterns))
 
     args = parser.parse_args()
     DEBUG = args.DEBUG
-    config_dir = os.environ["MYHELP_DIR"]
+    config_dir = os.environ["MYHELP_CFG_DIR"]
     if not os.path.isdir(config_dir):
         # If config_dir doesn't exist, create it.
         os.mkdir(config_dir)
